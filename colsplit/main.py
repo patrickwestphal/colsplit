@@ -3,6 +3,7 @@ import sys
 
 from colsplit.colsplitter import ColSplitter
 
+
 def run(input_file_path, outfile_path=None, csv_file_header=False):
 
     col_names = None
@@ -26,7 +27,7 @@ def run(input_file_path, outfile_path=None, csv_file_header=False):
 
         num_cols = None
         for line in csv_reader:
-            if len(line)>0 and num_cols==None:
+            if len(line) > 0 and num_cols is None:
                 num_cols = len(line)
             for i in range(len(line)):
 
