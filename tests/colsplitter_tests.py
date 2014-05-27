@@ -3,6 +3,7 @@ import unittest
 
 from colsplit.colsplitter import ColSplitter
 
+
 class TestColSplitter(unittest.TestCase):
 
     def setUp(self):
@@ -64,23 +65,23 @@ class TestColSplitter(unittest.TestCase):
         self.assertEqual(num_lines, arr_lines)
         self.assertEqual(num_cols, arr_cols)
 
-        self.assertEqual(b'one', arr[0,0])
-        self.assertEqual(b'two', arr[0,1])
-        self.assertEqual(b'three', arr[0,2])
-        self.assertEqual(clsplttr._null, arr[0,3])
-        self.assertEqual(clsplttr._null, arr[0,4])
+        self.assertEqual(b'one', arr[0, 0])
+        self.assertEqual(b'two', arr[0, 1])
+        self.assertEqual(b'three', arr[0, 2])
+        self.assertEqual(clsplttr._null, arr[0, 3])
+        self.assertEqual(clsplttr._null, arr[0, 4])
 
-        self.assertEqual(b'four', arr[1,0])
-        self.assertEqual(b'five', arr[1,1])
-        self.assertEqual(b'six', arr[1,2])
-        self.assertEqual(b'seven', arr[1,3])
-        self.assertEqual(b'eight', arr[1,4])
+        self.assertEqual(b'four', arr[1, 0])
+        self.assertEqual(b'five', arr[1, 1])
+        self.assertEqual(b'six', arr[1, 2])
+        self.assertEqual(b'seven', arr[1, 3])
+        self.assertEqual(b'eight', arr[1, 4])
 
-        self.assertEqual(b'nine', arr[2,0])
-        self.assertEqual(clsplttr._null, arr[2,1])
-        self.assertEqual(clsplttr._null, arr[2,2])
-        self.assertEqual(clsplttr._null, arr[2,3])
-        self.assertEqual(clsplttr._null, arr[2,4])
+        self.assertEqual(b'nine', arr[2, 0])
+        self.assertEqual(clsplttr._null, arr[2, 1])
+        self.assertEqual(clsplttr._null, arr[2, 2])
+        self.assertEqual(clsplttr._null, arr[2, 3])
+        self.assertEqual(clsplttr._null, arr[2, 4])
 
     def test__get_type(self):
         clsplttr = ColSplitter()
@@ -120,5 +121,3 @@ class TestColSplitter(unittest.TestCase):
         line_6 = 'a'
         clsplttr.add_line(line_6)
         self.assertGreater(1, len(clsplttr._token_col_types))
-
-
