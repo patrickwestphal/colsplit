@@ -1,5 +1,6 @@
 import numpy as np
 
+
 class ColSplitter(object):
     """TODO: implement
     TODO: test
@@ -24,7 +25,8 @@ class ColSplitter(object):
         # to keep track of the actual line number to write in the numpy array
         self._line_counter = 0
 
-        # list of lists (i.e. pseudo 2d array) containing the actual line tokens
+        # list of lists (i.e. pseudo 2d array) containing the actual line
+        # tokens
         self._line_tokens = [[]]
 
     def add_line(self, line):
@@ -89,7 +91,7 @@ class ColSplitter(object):
 
             type = self._get_type(token)
 
-            if types.get(type) == None:
+            if types.get(type) is None:
                 types[type] = 1
             else:
                 type_count = types[type]
@@ -103,15 +105,14 @@ class ColSplitter(object):
         datatypes of the actual tokens.
         """
         token_col_nr = 0
-        
 
         while token_col_nr < self._max_line_tokens:
             # check if there is a predominant type
-            types = self._get_types(arr[:,token_col_nr])
+            types = self._get_types(arr[:, token_col_nr])
 
             # 1) the token column is homogeneous with respect to its type
             #    so nothing has to be done here
-            if len(types)==1:
+            if len(types) == 1:
                 self._token_col_types.append(types.popitem()[0])
 
             else:
@@ -125,15 +126,15 @@ class ColSplitter(object):
                         predom_type = type
                         predom_type_count = type_count
                 ratio = predom_type_count/whole_count
-                
+
                 # 2) the token column has a predominant type
                 if ratio > self._threshold:
                     pass
 
-                else:
                 # 3) the token column is mixed
+                else:
                     pass
-            
+
             token_col_nr += 1
 
     def get_data(self):
@@ -141,5 +142,3 @@ class ColSplitter(object):
         """
         arr = self._create_array()
         self._homogenize_on_types(arr)
-
-
