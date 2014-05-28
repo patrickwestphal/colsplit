@@ -1,5 +1,7 @@
-from nose.tools import *
 import unittest
+
+import numpy as np
+from nose.tools import *
 
 from colsplit.colsplitter import ColSplitter
 
@@ -121,3 +123,78 @@ class TestColSplitter(unittest.TestCase):
         line_6 = 'a'
         clsplttr.add_line(line_6)
         self.assertGreater(1, len(clsplttr._token_col_types))
+
+    def test__move_from_null_col(self):
+        cs = ColSplitter()
+        cs._token_col_types = [cs._int, cs._null_type]
+        cs._max_token_str_len = 6
+        cs._line_counter = 6
+        arr = np.chararray((6, 3), cs._max_token_str_len)
+        # 0) left: OK
+        arr[0] = [cs._null, '23', 'test01']
+        # 1) left: wrong type; right: NULL
+        arr[1] = [cs._null, 'test02', cs._null]
+        # 2) left: wrong type; right: not NULL
+        arr[2] = [cs._null, 'test03', 'test04']
+        # 3) left: already assigned; right: NULL
+        arr[3] = ['24', 'test05', cs._null]
+        # 4) left: already assigned; right not NULL
+        arr[4] = ['25', 'test06', 'test07']
+        # 5) not to move
+        arr[5] = ['26', cs._null, 'test08']
+        arr = cs._move_from_null_col(arr, 1, cs._int, cs._valid)
+
+        self.assertEqual((6, 3), arr.shape)
+        # 0)
+        self.assertEqual(b'23', arr[0, 0])
+        self.assertEqual(b'test01', arr[0, 1])
+        self.assertEqual(cs._null, arr[0, 2])
+        # 1)
+        self.assertEqual(cs._null, arr[1, 0])
+        self.assertEqual(b'test02', arr[1, 1])
+        self.assertEqual(cs._null, arr[1, 2])
+        # 2)
+        self.assertEqual(cs._null, arr[2, 0])
+        self.assertEqual(b'test03', arr[2, 1])
+        self.assertEqual(b'test04', arr[2, 2])
+        # 3)
+        self.assertEqual(b'24', arr[3, 0])
+        self.assertEqual(b'test05', arr[3, 1])
+        self.assertEqual(cs._null, arr[3, 2])
+        # 4)
+        self.assertEqual(b'25', arr[4, 0])
+        self.assertEqual(b'test06', arr[4, 1])
+        self.assertEqual(b'test07', arr[4, 2])
+        # 5)
+        self.assertEqual(b'26', arr[5, 0])
+        self.assertEqual(b'test08', arr[5, 1])
+        self.assertEqual(cs._null, arr[5, 2])
+
+        # in the last column
+        self.assertEqual((6, 3), arr.shape)
+        arr = cs._move_from_null_col(arr, 2, cs._str, cs._invalid)
+        self.assertEqual((6, 3), arr.shape)
+        # 0)
+        self.assertEqual(b'23', arr[0, 0])
+        self.assertEqual(b'test01', arr[0, 1])
+        self.assertEqual(cs._null, arr[0, 2])
+        # 1)
+        self.assertEqual(cs._null, arr[1, 0])
+        self.assertEqual(b'test02', arr[1, 1])
+        self.assertEqual(cs._null, arr[1, 2])
+        # 2)
+        self.assertEqual(cs._null, arr[2, 0])
+        self.assertEqual(b'test03', arr[2, 1])
+        self.assertEqual(b'test04', arr[2, 2])
+        # 3)
+        self.assertEqual(b'24', arr[3, 0])
+        self.assertEqual(b'test05', arr[3, 1])
+        self.assertEqual(cs._null, arr[3, 2])
+        # 4)
+        self.assertEqual(b'25', arr[4, 0])
+        self.assertEqual(b'test06', arr[4, 1])
+        self.assertEqual(b'test07', arr[4, 2])
+        # 5)
+        self.assertEqual(b'26', arr[5, 0])
+        self.assertEqual(b'test08', arr[5, 1])
+        self.assertEqual(cs._null, arr[5, 2])
