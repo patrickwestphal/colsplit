@@ -141,11 +141,22 @@ class ColSplitter(object):
 
             else:
                 # move to right or do not move the cell at all
-                # -> check if we're in the right most column
-                if r_col_type == self._invalid:
+                # -> check if we're in the right most column (and the overall
+                # array has more than one column)
+                # FIXME: if sparse --> do not add col (?) else: adding col makes sense
+                if r_col_type == self._invalid and l_col_type != self._invalid:
                     # do nothing since we're at the last column
                     pass
                 else:
+                    # FIXME: if sparse --> do not add col (?) else: adding col makes sense
+                    # add new column if there is only one column, i.e.
+                    # l_col_type == r_col_type == self._invalid
+                    if l_col_type == r_col_type == self._invalid:
+                        new_col = np.chararray((self._line_counter, 1),
+                                                self._max_token_str_len)
+                        new_col.fill(self._null)
+                        arr = np.append(arr, new_col, 1)
+
                     # check if right neigbor cell is empty
                     r_neighbor = arr[line_counter, token_col_nr+1]
                     if r_neighbor == self._null:
@@ -192,12 +203,13 @@ class ColSplitter(object):
                 predom_type = None
                 predom_type_count = 0
                 whole_count = 0
-                for type in self._token_col_types:
-                    type_count = self._token_col_types[type]
+                for type_ in types:
+                    type_count = types[type_]
                     whole_count += type_count
                     if type_count > predom_type_count:
-                        predom_type = type
+                        predom_type = type_
                         predom_type_count = type_count
+                self._token_col_types.append(predom_type)
                 ratio = predom_type_count/whole_count
 
                 # 2) the token column has a predominant type
@@ -206,16 +218,16 @@ class ColSplitter(object):
                     # check if there are values in the column to the right
                     # yes --> valid; no --> invalid (i.e. we're in the last
                     # token column)
-                    arr_col_num = char_arr.shape[1]
-                    if col_nr == (arr_col_num-1):
+                    arr_col_num = arr.shape[1]
+                    if token_col_nr == (arr_col_num-1):
                         right_col_type = self._invalid
                     else:
                         right_col_type = self._valid
 
                     # get type of col to the left (invalid means, there is no
                     # column to the left)
-                    if col_nr > 0:
-                        left_col_type = col_types[col_nr-1]
+                    if token_col_nr > 0:
+                        left_col_type = self._token_col_types[token_col_nr-1]
                     else:
                         left_col_type = self._invalid
 
@@ -240,7 +252,11 @@ class ColSplitter(object):
 
                     # ii) predominant type is not self._null_type
                     else:
-                        pass
+                        arr = self._move_from_col(arr,
+                                                  token_col_nr,
+                                                  predom_type,
+                                                  left_col_type,
+                                                  right_col_type)
                 # 3) the token column is mixed
                 else:
                     pass
@@ -251,4 +267,5 @@ class ColSplitter(object):
         """returns a homogenized version of the input column
         """
         arr = self._create_array()
+        self._token_col_types = []
         self._homogenize_on_types(arr)

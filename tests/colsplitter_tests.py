@@ -122,7 +122,8 @@ class TestColSplitter(unittest.TestCase):
 
         line_6 = 'a'
         clsplttr.add_line(line_6)
-        self.assertGreater(1, len(clsplttr._token_col_types))
+        clsplttr.get_data()
+        self.assertGreater(len(clsplttr._token_col_types), 1)
 
     def test__move_from_null_col(self):
         cs = ColSplitter()
