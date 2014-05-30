@@ -1,5 +1,4 @@
 import numpy as np
-import scipy
 
 
 class ColSplitter(object):
@@ -15,11 +14,12 @@ class ColSplitter(object):
     _null_type = 'null'
     _invalid = 'invalid'
     _valid = 'valid'
+    _mixed = 'mixed'
 
     def __init__(self, delimiter=' ', threshold=0.7):
         self._delimiter = delimiter
         self._threshold = threshold
-        self._max_token_str_len = 0
+        self._max_token_str_len = len(self._null)
         self._max_line_tokens = 0
         self._token_col_types = []
 
@@ -101,69 +101,116 @@ class ColSplitter(object):
 
     def _move_from_null_col(self, arr, token_col_nr, l_col_type, r_col_type):
         """This method moves all tokens of a sparse token column to the
-        neighbor columns. First it is tried to move tokens to the left neighbor
-        column. This only works if the type of the token matches the type of
-        the left neighbor column and the corresponding token cell is empty. In
-        all other cases tokens are moved to the right. In case the right
-        neighbor cell is not empty, the whole right 'sub line' has to be moved
-        after introducing a new column on the rightmost position.
+        neighbor columns, if possible. First it is tried to move tokens to the
+        left neighbor column. This only works if the type of the token matches
+        the type of the left neighbor column and the corresponding token cell
+        is empty. In all other cases it is tried to move tokens to the right.
+        In case the right neighbor cell is not empty, the whole right 'sub
+        line' has to be moved after introducing a new column on the rightmost
+        position.
+        In case, the considered token column is the last, i.e. rightmost, no
+        tokens are moved to the right. Then the token column is also not
+        deleted.
         """
-        arr = self._move_from_col(arr, token_col_nr,
-                                  self._null_type, l_col_type, r_col_type)
+        line_counter = 0
+        column_appended = False
 
-        types = self._get_types(arr[:, token_col_nr])
-        if (token_col_nr+1) != arr.shape[1] or \
-                (len(types) == 1 and
-                 types.types.popitem()[0] == self._null_type):
+        while line_counter < arr.shape[0]:
+            token_type = self._get_type(arr[line_counter, token_col_nr])
+            if token_type != self._null_type:
+                # onyl non-NULL values are considered
+
+                # move token to the left cell if the type matches and the cell
+                # to the left is empty
+                if l_col_type != self._invalid and token_type == l_col_type \
+                        and arr[line_counter, token_col_nr-1] == self._null:
+
+                    arr[line_counter, token_col_nr-1] = \
+                        arr[line_counter, token_col_nr]
+                    arr[line_counter, token_col_nr] = self._null
+
+                else:  # move the token to the right...
+
+                    # ...but only if we're not in the rightmost column
+                    if r_col_type != self._invalid:
+
+                        # check if right neigbor cell is empty
+                        if arr[line_counter, token_col_nr+1] == self._null:
+                            # easy case: just move cell value to right
+                            # neighbor cell
+                            arr[line_counter, token_col_nr+1] = \
+                                arr[line_counter, token_col_nr]
+                            arr[line_counter, token_col_nr] = self._null
+
+                        else:
+                            # append a new column (if not done, yet) and move
+                            # all right neighbor cells of the same line one
+                            # cell to the right
+                            if not column_appended:
+                                new_col = np.chararray((self._line_counter, 1),
+                                                       self._max_token_str_len)
+                                new_col.fill(self._null)
+                                arr = np.append(arr, new_col, 1)
+                                column_appended = True
+                            c = arr.shape[1] - 2
+
+                            while c >= token_col_nr:
+                                # copy to the right
+                                arr[line_counter, c+1] = arr[line_counter, c]
+                                c -= 1
+                            arr[line_counter, token_col_nr] = self._null
+            line_counter += 1
+
+        # delete the considered column, if it could be emptied completely
+        col_types = self._get_types(arr[:, token_col_nr])
+        if len(col_types) == 1 and col_types.popitem()[0] == self._null_type:
 
             arr = np.delete(arr, (token_col_nr), 1)
             token_col_nr -= 1
+        else:
+            # the token column is marked as mixed column
+            self._token_col_types.append(self._mixed)
 
         return arr
 
     def _move_from_col(self, arr, token_col_nr,
                        token_col_type, l_col_type, r_col_type):
+        """This method moved tokens that are not NULL and do not match the
+        token columns predominant type. First it is tried to move tokens to the
+        left side. This is done when the token's type matches the token
+        column's type and the left neighbor cell is empty. Otherwise cells are
+        moved to the right. In case, the right neighbor cell is not empty, the
+        whole 'sub line' is moved.
+        """
         column_appended = False
         line_counter = 0
 
         while line_counter < arr.shape[0]:
             token_type = self._get_type(arr[line_counter, token_col_nr])
-            if token_type == token_col_type:
-                # token is in the right place; nothing to do here
-                pass
-            # move to left if the type of the column to the left matches and
-            # the left neighbor cell is empty
-            elif l_col_type != self._invalid and token_type == l_col_type \
-                    and arr[line_counter, token_col_nr-1] == self._null:
 
-                arr[line_counter, token_col_nr-1] = \
-                    arr[line_counter, token_col_nr]
+            if token_type != token_col_type and token_type != self._null:
+                # only non-NULL tokens are considered that are not of the
+                # column's type
 
-            else:
-                # move to right or do not move the cell at all
-                # -> check if we're in the right most column (and the overall
-                # array has more than one column)
-                # FIXME: if sparse --> do not add col (?) else: adding col makes sense
-                if r_col_type == self._invalid and l_col_type != self._invalid:
-                    # do nothing since we're at the last column
-                    pass
-                else:
-                    # FIXME: if sparse --> do not add col (?) else: adding col makes sense
-                    # add new column if there is only one column, i.e.
-                    # l_col_type == r_col_type == self._invalid
-                    if l_col_type == r_col_type == self._invalid:
-                        new_col = np.chararray((self._line_counter, 1),
-                                                self._max_token_str_len)
-                        new_col.fill(self._null)
-                        arr = np.append(arr, new_col, 1)
+                # move to left if the type of the column to the left matches
+                # and the left neighbor cell is empty
+                if l_col_type != self._invalid and token_type == l_col_type \
+                        and arr[line_counter, token_col_nr-1] == self._null:
 
-                    # check if right neigbor cell is empty
-                    r_neighbor = arr[line_counter, token_col_nr+1]
-                    if r_neighbor == self._null:
+                    arr[line_counter, token_col_nr-1] = \
+                        arr[line_counter, token_col_nr]
+                    arr[line_counter, token_col_nr] = self._null
+
+                else:  # move to right
+                    # if the right neighbor cell is not empty, a new column has
+                    # to be added before moving (if not done already)
+                    if r_col_type != self._invalid and \
+                            arr[line_counter, token_col_nr+1] == self._null:
                         # easy case: just move cell value to
                         # right neighbor cell
                         arr[line_counter, token_col_nr+1] = \
                             arr[line_counter, token_col_nr]
+                        arr[line_counter, token_col_nr] = self._null
                     else:
                         # append a new column (if not done, yet) and move all
                         # right neighbor cells of the same line one cell to
@@ -173,6 +220,7 @@ class ColSplitter(object):
                                                    self._max_token_str_len)
                             new_col.fill(self._null)
                             arr = np.append(arr, new_col, 1)
+                            # arr = np.append(new_col, arr, 1)
                             column_appended = True
                         c = arr.shape[1] - 2
 
@@ -180,7 +228,10 @@ class ColSplitter(object):
                             # copy to the right
                             arr[line_counter, c+1] = arr[line_counter, c]
                             c -= 1
+                        arr[line_counter, token_col_nr] = self._null
             line_counter += 1
+
+        self._token_col_types.append(token_col_type)
 
         return arr
 
