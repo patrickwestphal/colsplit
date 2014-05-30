@@ -22,6 +22,7 @@ class ColSplitter(object):
         self._max_token_str_len = len(self._null)
         self._max_line_tokens = 0
         self._token_col_types = []
+        self._token_col_lengths = []
 
         # to keep track of the actual line number to write in the numpy array
         self._line_counter = 0
@@ -66,36 +67,36 @@ class ColSplitter(object):
 
     def _get_type(self, token):
         if token == self._null:
-            type = self._null_type
+            token_type = self._null_type
         else:
-            type = self._str
+            token_type = self._str
 
             try:
                 float(token)
-                type = self._float
+                token_type = self._float
             except ValueError:
                 pass
 
             try:
                 int(token)
-                type = self._int
+                token_type = self._int
             except ValueError:
                 pass
 
-        return type
+        return token_type
 
     def _get_types(self, token_col):
         types = {}
         for token in token_col:
 
-            type = self._get_type(token)
+            token_type = self._get_type(token)
 
-            if types.get(type) is None:
-                types[type] = 1
+            if types.get(token_type) is None:
+                types[token_type] = 1
             else:
-                type_count = types[type]
+                type_count = types[token_type]
                 type_count += 1
-                types[type] = type_count
+                types[token_type] = type_count
 
         return types
 
@@ -175,7 +176,7 @@ class ColSplitter(object):
 
     def _move_from_col(self, arr, token_col_nr,
                        token_col_type, l_col_type, r_col_type):
-        """This method moved tokens that are not NULL and do not match the
+        """This method moves tokens that are not NULL and do not match the
         token columns predominant type. First it is tried to move tokens to the
         left side. This is done when the token's type matches the token
         column's type and the left neighbor cell is empty. Otherwise cells are
@@ -216,11 +217,13 @@ class ColSplitter(object):
                         # right neighbor cells of the same line one cell to
                         # the right
                         if not column_appended:
+                            # TODO: self._line_counter vs arr.shape[0] --> was
+                            # not in sync anymore when _move_from_len_col was
+                            # called
                             new_col = np.chararray((self._line_counter, 1),
                                                    self._max_token_str_len)
                             new_col.fill(self._null)
                             arr = np.append(arr, new_col, 1)
-                            # arr = np.append(new_col, arr, 1)
                             column_appended = True
                         c = arr.shape[1] - 2
 
@@ -241,7 +244,7 @@ class ColSplitter(object):
         """
         token_col_nr = 0
 
-        while token_col_nr < self._max_line_tokens:
+        while token_col_nr < arr.shape[1]:
             # check if there is a predominant type
             types = self._get_types(arr[:, token_col_nr])
 
@@ -314,9 +317,99 @@ class ColSplitter(object):
 
             token_col_nr += 1
 
+        return arr
+
+    def _get_length_count(self, token_col, length):
+        count = 0
+        for token in token_col:
+            if self._get_type(token) == self._str:
+                if len(token) == length:
+                    count += 1
+        return count
+
+    def _move_from_len_col(self, arr, token_col_nr, length):
+        """Assumption: the token columns are already homogenized on their types
+        TODO: comment
+        """
+        line_counter = 0
+        while line_counter < arr.shape[0]:
+            token_len = len(arr[line_counter, token_col_nr])
+
+            if token_len != length:
+                # try to move it to the left column --> check if the left
+                # column is a string column and if it has a fixed str len check
+                # whether the str len matches and if the left neighbor cell is
+                # empty
+                if self._token_col_types[token_col_nr-1] == self._str and \
+                        (self._token_col_lengths[token_col_nr-1] == token_len
+                         or self._token_col_lengths[token_col_nr-1] == -1) and \
+                        arr[line_counter, token_col_nr-1] == self._null:
+
+                    arr[line_counter, token_col_nr-1] = \
+                        arr[line_counter, token_col_nr]
+                    arr[line_counter, token_col_nr] = self._null
+
+                else:  # move to the right column
+                    # The token can only be moved to the right neighbor cell if
+                    # - the type of the right neigbor column is self._str
+                    # - the cell is empty
+                    # - there is a right column
+                    if token_col_nr+1 == arr.shape[1]:
+                        r_col_type = self._invalid
+                    else:
+                        r_col_type = self._token_col_types[token_col_nr+1]
+
+                    if r_col_type == self._str and \
+                            arr[line_counter, token_col_nr+1] == self._null:
+
+                        arr[line_counter, token_col_nr+1] = \
+                            arr[line_counter, token_col_nr]
+                        arr[line_counter, token_col_nr] = self._null
+
+                    else:  # a new column has to be introduced
+                        new_col = np.chararray((arr.shape[0], 1),
+                                               self._max_token_str_len)
+                        new_col.fill(self._null)
+
+                        l_arr = arr[:, :token_col_nr+1]
+                        r_arr = arr[:, token_col_nr+1:]
+
+                        arr = np.append(l_arr, new_col, 1)
+                        arr = np.append(arr, r_arr, 1)
+
+                        self._token_col_types = \
+                            self._token_col_types[:token_col_nr] + \
+                            [self._str] + \
+                            self._token_col_types[token_col_nr:]
+
+                        arr[line_counter, token_col_nr+1] = \
+                            arr[line_counter, token_col_nr]
+                        arr[line_counter, token_col_nr] = self._null
+            line_counter += 1
+        return arr
+
+    def _homogenize_on_token_len(self, arr, length):
+        """This method aims at homogenizing the input array based on the string
+        lengths of sort tokens to align the array based on abbreviation token
+        columns
+        """
+        token_col_nr = 0
+        while token_col_nr < arr.shape[1]:
+            # check if there is a predominant str len
+            length_count = self._get_length_count(arr[:, token_col_nr], length)
+            if length_count/arr.shape[0] > self._threshold:
+                self._move_from_len_col(arr, token_col_nr, length)
+            else:
+                self._token_col_lengths.append(-1)
+            token_col_nr += 1
+        return arr
+
     def get_data(self):
         """returns a homogenized version of the input column
         """
         arr = self._create_array()
         self._token_col_types = []
-        self._homogenize_on_types(arr)
+        arr = self._homogenize_on_types(arr)
+        self._homogenize_on_token_len(arr, 2)
+
+        return arr

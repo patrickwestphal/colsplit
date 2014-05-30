@@ -250,3 +250,89 @@ class TestColSplitter(unittest.TestCase):
         self.assertEqual(b'0.5', arr[5, 1])
         self.assertEqual(cs._null, arr[5, 2])
         self.assertEqual(cs._null, arr[5, 3])
+
+    def test__move_from_len_col(self):
+        cs1 = ColSplitter()
+        cs1._token_col_types = [cs1._int, cs1._str, cs1._str]
+        cs1._token_col_lengths = [-1]
+        arr1 = np.chararray((2, 3), cs1._max_token_str_len)
+
+        # 0) left: wrong type
+        # 1) right: OK
+        arr1[0] = [cs1._null, 'AA', cs1._null]
+        # 2) right: not null --> new col insertion
+        arr1[1] = [cs1._null, 'BB', 'CC']
+
+        arr1 = cs1._move_from_len_col(arr1, 1, 3)
+        self.assertEqual((2, 4), arr1.shape)
+        # 0, 1)
+        self.assertEqual(cs1._null, arr1[0, 0])
+        self.assertEqual(cs1._null, arr1[0, 1])
+        self.assertEqual(cs1._null, arr1[0, 2])
+        self.assertEqual(b'AA', arr1[0, 3])
+        # 2)
+        self.assertEqual(cs1._null, arr1[1, 0])
+        self.assertEqual(cs1._null, arr1[1, 1])
+        self.assertEqual(b'BB', arr1[1, 2])
+        self.assertEqual(b'CC', arr1[1, 3])
+
+        #
+        cs2 = ColSplitter()
+        cs2._token_col_types = [cs2._str, cs2._str, cs2._float]
+        cs2._token_col_lengths = [-1]
+        arr2 = np.chararray((3, 3), cs2._max_token_str_len)
+
+        # 3) left: OK (no len restriction)
+        arr2[0] = [cs2._null, 'AA', cs2._null]
+        # 4) right: wrong type --> new col insertion
+        arr2[1] = ['BB', 'CC', cs2._null]
+        # 5) right: OK after col insertion
+        arr2[2] = ['DD', 'EE', cs2._null]
+
+        arr2 = cs2._move_from_len_col(arr2, 1, 3)
+        self.assertEqual((3, 4), arr2.shape)
+
+        # 3)
+        self.assertEqual(b'AA', arr2[0, 0])
+        self.assertEqual(cs2._null, arr2[0, 1])
+        self.assertEqual(cs2._null, arr2[0, 2])
+        self.assertEqual(cs2._null, arr2[0, 3])
+        # 4)
+        self.assertEqual(b'BB', arr2[1, 0])
+        self.assertEqual(cs2._null, arr2[1, 1])
+        self.assertEqual(b'CC', arr2[1, 2])
+        self.assertEqual(cs2._null, arr2[1, 3])
+        # 5)
+        self.assertEqual(b'DD', arr2[2, 0])
+        self.assertEqual(cs2._null, arr2[2, 1])
+        self.assertEqual(b'EE', arr2[2, 2])
+        self.assertEqual(cs2._null, arr2[2, 3])
+
+        #
+        cs3 = ColSplitter()
+        cs3._token_col_types = [cs3._str, cs3._str]
+        cs3._token_col_lengths = [4]
+        arr3 = np.chararray((3, 2), cs3._max_token_str_len)
+
+        # 6) left: correct type, but wrong str len
+        arr3[0] = [cs3._null, 'AA']
+        # 7) left: type and len OK, already assigned
+        arr3[1] = ['BBBB', 'CCCC']
+        # 8) left: OK (len match)
+        arr3[2] = [cs3._null, 'DDDD']
+
+        arr3 = cs3._move_from_len_col(arr3, 1, 3)
+        self.assertEqual((3, 3), arr3.shape)
+
+        # 6)
+        self.assertEqual(cs3._null, arr3[0, 0])
+        self.assertEqual(cs3._null, arr3[0, 1])
+        self.assertEqual(b'AA', arr3[0, 2])
+        # 7)
+        self.assertEqual(b'BBBB', arr3[1, 0])
+        self.assertEqual(cs3._null, arr3[1, 1])
+        self.assertEqual(b'CCCC', arr3[1, 2])
+        # 8)
+        self.assertEqual(b'DDDD', arr3[2, 0])
+        self.assertEqual(cs3._null, arr3[2, 1])
+        self.assertEqual(cs3._null, arr3[2, 2])
