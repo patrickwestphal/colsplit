@@ -103,7 +103,7 @@ class TestColSplitter(unittest.TestCase):
         float_token = '0.123'
         self.assertEqual(clsplttr._float, clsplttr._get_type(float_token))
 
-    def test__hom_on_types___token_col_types_homogeneous(self):
+    def xtest__hom_on_types___token_col_types_homogeneous(self):
         line_1 = '1'
         line_2 = '2'
         line_3 = '3'
@@ -336,3 +336,24 @@ class TestColSplitter(unittest.TestCase):
         self.assertEqual(b'DDDD', arr3[2, 0])
         self.assertEqual(cs3._null, arr3[2, 1])
         self.assertEqual(cs3._null, arr3[2, 2])
+
+    def test__is_sparse(self):
+        cs = ColSplitter()
+        cs._threshold = 0.8
+
+        charr = np.chararray((10, 3), 5)
+        vals1 = [cs._null, 'one', cs._null, 'two', cs._null, cs._null,
+            'three', cs._null, cs._null, cs._null]
+        vals2 = [cs._null, 'one', cs._null, cs._null, cs._null, cs._null,
+            'two', cs._null, cs._null, cs._null]
+        vals3 = ['NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'one',
+            'NULL', 'NULL', 'NULL']
+        
+        for i in range(10):
+            charr[i,0] = vals1[i]
+            charr[i,1] = vals2[i]
+            charr[i,2] = vals3[i]
+        
+        self.assertFalse(cs._is_sparse(charr[:,0]))
+        self.assertTrue(cs._is_sparse(charr[:,1]))
+        self.assertTrue(cs._is_sparse(charr[:,2]))
