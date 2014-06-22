@@ -103,7 +103,7 @@ class TestColSplitter(unittest.TestCase):
         float_token = '0.123'
         self.assertEqual(clsplttr._float, clsplttr._get_type(float_token))
 
-    def xtest__hom_on_types___token_col_types_homogeneous(self):
+    def test__hom_on_types___token_col_types_homogeneous(self):
         line_1 = '1'
         line_2 = '2'
         line_3 = '3'
@@ -125,218 +125,6 @@ class TestColSplitter(unittest.TestCase):
         clsplttr.get_data()
         self.assertGreater(len(clsplttr._token_col_types), 1)
 
-    def test__move_from_null_col(self):
-        cs = ColSplitter()
-        cs._token_col_types = [cs._int]
-        cs._max_token_str_len = 6
-        cs._line_counter = 6
-        arr = np.chararray((6, 3), cs._max_token_str_len)
-        # 0) left: OK
-        arr[0] = [cs._null, '23', 'test01']
-        # 1) left: wrong type; right: NULL
-        arr[1] = [cs._null, 'test02', cs._null]
-        # 2) left: wrong type; right: not NULL
-        arr[2] = [cs._null, 'test03', 'test04']
-        # 3) left: already assigned; right: NULL
-        arr[3] = ['24', 'test05', cs._null]
-        # 4) left: already assigned; right not NULL
-        arr[4] = ['25', 'test06', 'test07']
-        # 5) not to move
-        arr[5] = ['26', cs._null, 'test08']
-        arr = cs._move_from_null_col(arr, 1, cs._int, cs._valid)
-
-        self.assertEqual((6, 3), arr.shape)
-        # 0)
-        self.assertEqual(b'23', arr[0, 0])
-        self.assertEqual(b'test01', arr[0, 1])
-        self.assertEqual(cs._null, arr[0, 2])
-        # 1)
-        self.assertEqual(cs._null, arr[1, 0])
-        self.assertEqual(b'test02', arr[1, 1])
-        self.assertEqual(cs._null, arr[1, 2])
-        # 2)
-        self.assertEqual(cs._null, arr[2, 0])
-        self.assertEqual(b'test03', arr[2, 1])
-        self.assertEqual(b'test04', arr[2, 2])
-        # 3)
-        self.assertEqual(b'24', arr[3, 0])
-        self.assertEqual(b'test05', arr[3, 1])
-        self.assertEqual(cs._null, arr[3, 2])
-        # 4)
-        self.assertEqual(b'25', arr[4, 0])
-        self.assertEqual(b'test06', arr[4, 1])
-        self.assertEqual(b'test07', arr[4, 2])
-        # 5)
-        self.assertEqual(b'26', arr[5, 0])
-        self.assertEqual(b'test08', arr[5, 1])
-        self.assertEqual(cs._null, arr[5, 2])
-
-        # in the last column
-        arr = cs._move_from_null_col(arr, 2, cs._str, cs._invalid)
-        self.assertEqual((6, 3), arr.shape)
-        # 0)
-        self.assertEqual(b'23', arr[0, 0])
-        self.assertEqual(b'test01', arr[0, 1])
-        self.assertEqual(cs._null, arr[0, 2])
-        # 1)
-        self.assertEqual(cs._null, arr[1, 0])
-        self.assertEqual(b'test02', arr[1, 1])
-        self.assertEqual(cs._null, arr[1, 2])
-        # 2)
-        self.assertEqual(cs._null, arr[2, 0])
-        self.assertEqual(b'test03', arr[2, 1])
-        self.assertEqual(b'test04', arr[2, 2])
-        # 3)
-        self.assertEqual(b'24', arr[3, 0])
-        self.assertEqual(b'test05', arr[3, 1])
-        self.assertEqual(cs._null, arr[3, 2])
-        # 4)
-        self.assertEqual(b'25', arr[4, 0])
-        self.assertEqual(b'test06', arr[4, 1])
-        self.assertEqual(b'test07', arr[4, 2])
-        # 5)
-        self.assertEqual(b'26', arr[5, 0])
-        self.assertEqual(b'test08', arr[5, 1])
-        self.assertEqual(cs._null, arr[5, 2])
-
-    def test__move_from_col(self):
-        cs = ColSplitter()
-        cs._token_col_types = [cs._int, cs._float]
-        cs._max_token_str_len = 6
-        cs._line_counter = 6
-        arr = np.chararray((6, 3), cs._max_token_str_len)
-        # 0) left: OK
-        arr[0] = [cs._null, '23', 'test01']
-        # 1) left: wrong type; right: NULL
-        arr[1] = [cs._null, 'test02', cs._null]
-        # 2) left: wrong type; right: not NULL
-        arr[2] = [cs._null, 'test03', 'test04']
-        # 3) left: already assigned; right: NULL
-        arr[3] = ['24', '25', cs._null]
-        # 4) left: already assigned; right not NULL
-        arr[4] = ['26', '27', 'test05']
-        # 5) not to move
-        arr[5] = [cs._null, '0.5', cs._null]
-        arr = cs._move_from_col(arr, 1, cs._float, cs._int, cs._valid)
-
-        self.assertEqual((6, 4), arr.shape)
-        # 0)
-        self.assertEqual(b'23', arr[0, 0])
-        self.assertEqual(cs._null, arr[0, 1])
-        self.assertEqual(b'test01', arr[0, 2])
-        self.assertEqual(cs._null, arr[0, 3])
-        # 1)
-        self.assertEqual(cs._null, arr[1, 0])
-        self.assertEqual(cs._null, arr[1, 1])
-        self.assertEqual(b'test02', arr[1, 2])
-        self.assertEqual(cs._null, arr[1, 3])
-        # 2)
-        self.assertEqual(cs._null, arr[2, 0])
-        self.assertEqual(cs._null, arr[2, 1])
-        self.assertEqual(b'test03', arr[2, 2])
-        self.assertEqual(b'test04', arr[2, 3])
-        # 3)
-        self.assertEqual(b'24', arr[3, 0])
-        self.assertEqual(cs._null, arr[3, 1])
-        self.assertEqual(b'25', arr[3, 2])
-        self.assertEqual(cs._null, arr[3, 3])
-        # 4)
-        self.assertEqual(b'26', arr[4, 0])
-        self.assertEqual(cs._null, arr[4, 1])
-        self.assertEqual(b'27', arr[4, 2])
-        self.assertEqual(b'test05', arr[4, 3])
-        # 5)
-        self.assertEqual(cs._null, arr[5, 0])
-        self.assertEqual(b'0.5', arr[5, 1])
-        self.assertEqual(cs._null, arr[5, 2])
-        self.assertEqual(cs._null, arr[5, 3])
-
-    def test__move_from_len_col(self):
-        cs1 = ColSplitter()
-        cs1._token_col_types = [cs1._int, cs1._str, cs1._str]
-        cs1._token_col_lengths = [-1]
-        arr1 = np.chararray((2, 3), cs1._max_token_str_len)
-
-        # 0) left: wrong type
-        # 1) right: OK
-        arr1[0] = [cs1._null, 'AA', cs1._null]
-        # 2) right: not null --> new col insertion
-        arr1[1] = [cs1._null, 'BB', 'CC']
-
-        arr1 = cs1._move_from_len_col(arr1, 1, 3)
-        self.assertEqual((2, 4), arr1.shape)
-        # 0, 1)
-        self.assertEqual(cs1._null, arr1[0, 0])
-        self.assertEqual(cs1._null, arr1[0, 1])
-        self.assertEqual(cs1._null, arr1[0, 2])
-        self.assertEqual(b'AA', arr1[0, 3])
-        # 2)
-        self.assertEqual(cs1._null, arr1[1, 0])
-        self.assertEqual(cs1._null, arr1[1, 1])
-        self.assertEqual(b'BB', arr1[1, 2])
-        self.assertEqual(b'CC', arr1[1, 3])
-
-        #
-        cs2 = ColSplitter()
-        cs2._token_col_types = [cs2._str, cs2._str, cs2._float]
-        cs2._token_col_lengths = [-1]
-        arr2 = np.chararray((3, 3), cs2._max_token_str_len)
-
-        # 3) left: OK (no len restriction)
-        arr2[0] = [cs2._null, 'AA', cs2._null]
-        # 4) right: wrong type --> new col insertion
-        arr2[1] = ['BB', 'CC', cs2._null]
-        # 5) right: OK after col insertion
-        arr2[2] = ['DD', 'EE', cs2._null]
-
-        arr2 = cs2._move_from_len_col(arr2, 1, 3)
-        self.assertEqual((3, 4), arr2.shape)
-
-        # 3)
-        self.assertEqual(b'AA', arr2[0, 0])
-        self.assertEqual(cs2._null, arr2[0, 1])
-        self.assertEqual(cs2._null, arr2[0, 2])
-        self.assertEqual(cs2._null, arr2[0, 3])
-        # 4)
-        self.assertEqual(b'BB', arr2[1, 0])
-        self.assertEqual(cs2._null, arr2[1, 1])
-        self.assertEqual(b'CC', arr2[1, 2])
-        self.assertEqual(cs2._null, arr2[1, 3])
-        # 5)
-        self.assertEqual(b'DD', arr2[2, 0])
-        self.assertEqual(cs2._null, arr2[2, 1])
-        self.assertEqual(b'EE', arr2[2, 2])
-        self.assertEqual(cs2._null, arr2[2, 3])
-
-        #
-        cs3 = ColSplitter()
-        cs3._token_col_types = [cs3._str, cs3._str]
-        cs3._token_col_lengths = [4]
-        arr3 = np.chararray((3, 2), cs3._max_token_str_len)
-
-        # 6) left: correct type, but wrong str len
-        arr3[0] = [cs3._null, 'AA']
-        # 7) left: type and len OK, already assigned
-        arr3[1] = ['BBBB', 'CCCC']
-        # 8) left: OK (len match)
-        arr3[2] = [cs3._null, 'DDDD']
-
-        arr3 = cs3._move_from_len_col(arr3, 1, 3)
-        self.assertEqual((3, 3), arr3.shape)
-
-        # 6)
-        self.assertEqual(cs3._null, arr3[0, 0])
-        self.assertEqual(cs3._null, arr3[0, 1])
-        self.assertEqual(b'AA', arr3[0, 2])
-        # 7)
-        self.assertEqual(b'BBBB', arr3[1, 0])
-        self.assertEqual(cs3._null, arr3[1, 1])
-        self.assertEqual(b'CCCC', arr3[1, 2])
-        # 8)
-        self.assertEqual(b'DDDD', arr3[2, 0])
-        self.assertEqual(cs3._null, arr3[2, 1])
-        self.assertEqual(cs3._null, arr3[2, 2])
-
     def test__is_sparse(self):
         cs = ColSplitter()
         cs._threshold = 0.8
@@ -357,3 +145,486 @@ class TestColSplitter(unittest.TestCase):
         self.assertFalse(cs._is_sparse(charr[:,0]))
         self.assertTrue(cs._is_sparse(charr[:,1]))
         self.assertTrue(cs._is_sparse(charr[:,2]))
+
+    def test__try_intify_mv_left(self):
+        cs = ColSplitter()
+        charr = np.chararray((2, 3), 5)
+        charr[0, 0] = cs._null
+        charr[0, 1] = '23.0'
+        charr[0, 2] = cs._null
+
+        charr[1, 0] = cs._null
+        charr[1, 1] = '0.23'
+        charr[1, 2] = cs._null
+
+        res = cs._try_intify_mv_left(charr, 0, 1)
+        self.assertEqual(b'23', res[0, 0])
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(cs._null, res[0, 2])
+
+        res = cs._try_intify_mv_left(charr, 1, 1)
+        self.assertEqual(cs._null, res[1, 0])
+        self.assertEqual(b'0.23', res[1, 1])
+        self.assertEqual(cs._null, res[1, 2])
+
+    def test__try_intify_mv_right(self):
+        cs = ColSplitter()
+        charr = np.chararray((2, 3), 5)
+        charr[0, 0] = cs._null
+        charr[0, 1] = '23.0'
+        charr[0, 2] = cs._null
+
+        charr[1, 0] = cs._null
+        charr[1, 1] = '0.23'
+        charr[1, 2] = cs._null
+
+        res = cs._try_intify_mv_right(charr, 0, 1)
+        self.assertEqual(cs._null, res[0, 0])
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(b'23', res[0, 2])
+
+        res = cs._try_intify_mv_right(charr, 1, 1)
+        self.assertEqual(cs._null, res[1, 0])
+        self.assertEqual(b'0.23', res[1, 1])
+        self.assertEqual(cs._null, res[1, 2])
+
+    def test__try_intify_mv_right_mv_left(self):
+        cs = ColSplitter()
+        charr = np.chararray((2, 3), 5)
+        charr[0, 0] = cs._null
+        charr[0, 1] = '23.0'
+        charr[0, 2] = cs._null
+
+        charr[1, 0] = cs._null
+        charr[1, 1] = '0.23'
+        charr[1, 2] = cs._null
+
+        res = cs._try_intify_mv_right__mv_left(charr, 0, 1)
+        self.assertEqual(cs._null, res[0, 0])
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(b'23', res[0, 2])
+
+        res = cs._try_intify_mv_right__mv_left(charr, 1, 1)
+        self.assertEqual(b'0.23', res[1, 0])
+        self.assertEqual(cs._null, res[1, 1])
+        self.assertEqual(cs._null, res[1, 2])
+
+    def test__concat(self):
+        cs = ColSplitter()
+
+        charr = np.chararray((2, 3), 5)
+        charr[0, 0] = 'abc'
+        charr[0, 1] = 'd'
+        charr[0, 2] = 'efg'
+
+        charr[1, 0] = 'hijkl'
+        charr[1, 1] = 'mnop'
+        charr[1, 2] = cs._null
+
+        res = cs._concat(charr, 0, 0, 1, False)
+        self.assertEqual(b'abc d', res[0, 0])
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(b'efg', res[0, 2])
+        self.assertEqual(5, res.itemsize)
+
+        res = cs._concat(charr, 1, 0, 1, True)
+        self.assertEqual(cs._null, res[1, 0])
+        self.assertEqual(b'hijkl mnop', res[1, 1])
+        self.assertEqual(cs._null, res[1, 2])
+        self.assertEqual(10, res.itemsize)
+
+    def test__try_intify_mv_left__concat_right(self):
+        cs = ColSplitter()
+
+        charr = np.chararray((2, 3), 5)
+        charr[0, 0] = cs._null
+        charr[0, 1] = '23.0'
+        charr[0, 2] = cs._null
+
+        charr[1, 0] = cs._null
+        charr[1, 1] = '0.23'
+        charr[1, 2] = 'abc'
+
+        res = cs._try_intify_mv_left__concat_right(charr, 0, 1)
+        self.assertEqual(b'23', res[0, 0])
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(cs._null, res[0, 2])
+
+        res = cs._try_intify_mv_left__concat_right(charr, 1, 1)
+        self.assertEqual(cs._null, res[1, 0])
+        self.assertEqual(cs._null, res[1, 1])
+        self.assertEqual(b'0.23 abc', res[1, 2])
+
+    def test__try_intify_mv_right__concat_left(self):
+        cs = ColSplitter()
+
+        charr = np.chararray((2, 3), 5)
+        charr[0, 0] = cs._null
+        charr[0, 1] = '23.0'
+        charr[0, 2] = cs._null
+
+        charr[1, 0] = 'abc'
+        charr[1, 1] = '0.23'
+        charr[1, 2] = cs._null
+
+        res = cs._try_intify_mv_right__concat_left(charr, 0, 1)
+        self.assertEqual(cs._null, res[0, 0])
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(b'23', res[0, 2])
+
+        res = cs._try_intify_mv_right__concat_left(charr, 1, 1)
+        self.assertEqual(b'abc 0.23', res[1, 0])
+        self.assertEqual(cs._null, res[1, 1])
+        self.assertEqual(cs._null, res[1, 2])
+
+    def test__try_intify_mv_right__try_fl_mv_left(self):
+        cs = ColSplitter()
+        cs._token_col_lengths = [3, -1, -1]
+
+        charr = np.chararray((3, 3), 5)
+        charr[0, 0] = cs._null
+        charr[0, 1] = '23.0'
+        charr[0, 2] = cs._null
+
+        charr[1, 0] = cs._null
+        charr[1, 1] = '0.2'
+        charr[1, 2] = cs._null
+
+        charr[2, 0] = cs._null
+        charr[2, 1] = '0.23'
+        charr[2, 2] = cs._null
+
+        res = cs._try_intify_mv_right__try_fl_mv_left(charr, 0, 1)
+        self.assertEqual(cs._null, res[0, 0])
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(b'23', res[0, 2])
+
+        res = cs._try_intify_mv_right__try_fl_mv_left(charr, 1, 1)
+        self.assertEqual(b'0.2', res[1, 0])
+        self.assertEqual(cs._null, res[1, 1])
+        self.assertEqual(cs._null, res[1, 2])
+
+        res = cs._try_intify_mv_right__try_fl_mv_left(charr, 2, 1)
+        self.assertEqual(cs._null, res[2, 0])
+        self.assertEqual(b'0.23', res[2, 1])
+        self.assertEqual(cs._null, res[2, 2])
+
+    def test__try_fl_mv_left(self):
+        cs = ColSplitter()
+        cs._token_col_lengths = [2, -1, -1]
+
+        charr = np.chararray((2, 3), 5)
+        charr[0, 0] = cs._null
+        charr[0, 1] = 'ab'
+        charr[0, 2] = cs._null
+
+        charr[1, 0] = cs._null
+        charr[1, 1] = 'cde'
+        charr[1, 2] = cs._null
+
+        res = cs._try_fl_mv_left(charr, 0, 1)
+        self.assertEqual(b'ab', res[0, 0])
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(cs._null, res[0, 2])
+
+        res = cs._try_fl_mv_left(charr, 1, 1)
+        self.assertEqual(cs._null, res[1, 0])
+        self.assertEqual(b'cde', res[1, 1])
+        self.assertEqual(cs._null, res[1, 2])
+
+    def test__try_fl_mv_right(self):
+        cs = ColSplitter()
+        cs._token_col_lengths = [-1, -1, 2]
+
+        charr = np.chararray((2, 3), 5)
+        charr[0, 0] = cs._null
+        charr[0, 1] = 'ab'
+        charr[0, 2] = cs._null
+
+        charr[1, 0] = cs._null
+        charr[1, 1] = 'cde'
+        charr[1, 2] = cs._null
+
+        res = cs._try_fl_mv_right(charr, 0, 1)
+        self.assertEqual(cs._null, res[0, 0])
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(b'ab', res[0, 2])
+
+        res = cs._try_fl_mv_right(charr, 1, 1)
+        self.assertEqual(cs._null, res[1, 0])
+        self.assertEqual(b'cde', res[1, 1])
+        self.assertEqual(cs._null, res[1, 2])
+
+    def test__try_fl_mv(self):
+        cs1 = ColSplitter()
+        cs1._token_col_lengths = [2, -1, 2]
+
+        charr = np.chararray((2, 3), 5)
+        charr[0, 0] = cs1._null
+        charr[0, 1] = 'ab'
+        charr[0, 2] = cs1._null
+
+        charr[1, 0] = cs1._null
+        charr[1, 1] = 'cde'
+        charr[1, 2] = cs1._null
+
+        res = cs1._try_fl_mv(charr, 0, 1)
+        self.assertEqual(b'ab', res[0, 0])
+        self.assertEqual(cs1._null, res[0, 1])
+        self.assertEqual(cs1._null, res[0, 2])
+
+        res = cs1._try_fl_mv(charr, 1, 1)
+        self.assertEqual(cs1._null, res[1, 0])
+        self.assertEqual(b'cde', res[1, 1])
+        self.assertEqual(cs1._null, res[1, 2])
+
+        cs2 = ColSplitter()
+        cs2._token_col_lengths = [3, -1, 2]
+
+        charr = np.chararray((2, 3), 5)
+        charr[0, 0] = cs2._null
+        charr[0, 1] = 'ab'
+        charr[0, 2] = cs2._null
+
+        charr[1, 0] = cs2._null
+        charr[1, 1] = 'cde'
+        charr[1, 2] = cs2._null
+
+        res = cs2._try_fl_mv(charr, 0, 1)
+        self.assertEqual(cs2._null, res[0, 0])
+        self.assertEqual(cs2._null, res[0, 1])
+        self.assertEqual(b'ab', res[0, 2])
+
+        res = cs2._try_fl_mv(charr, 1, 1)
+        self.assertEqual(b'cde', res[1, 0])
+        self.assertEqual(cs2._null, res[1, 1])
+        self.assertEqual(cs2._null, res[1, 2])
+
+    def test__try_fl_mv_right__try_intify_mv_left(self):
+        cs = ColSplitter()
+        cs._token_col_lengths = [-1, -1, 3]
+
+        charr = np.chararray((3, 3), 5)
+        charr[0, 0] = cs._null
+        charr[0, 1] = '1.0'
+        charr[0, 2] = cs._null
+
+        charr[1, 0] = cs._null
+        charr[1, 1] = '12.0'
+        charr[1, 2] = cs._null
+
+        charr[2, 0] = cs._null
+        charr[2, 1] = '0.34'
+        charr[2, 2] = cs._null
+
+        res = cs._try_fl_mv_right__try_intify_mv_left(charr, 0, 1)
+        self.assertEqual(cs._null, res[0, 0])
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(b'1.0', res[0, 2])
+
+        res = cs._try_fl_mv_right__try_intify_mv_left(charr, 1, 1)
+        self.assertEqual(b'12', res[1, 0])
+        self.assertEqual(cs._null, res[1, 1])
+        self.assertEqual(cs._null, res[1, 2])
+
+        res = cs._try_fl_mv_right__try_intify_mv_left(charr, 2, 1)
+        self.assertEqual(cs._null, res[2, 0])
+        self.assertEqual(b'0.34', res[2, 1])
+        self.assertEqual(cs._null, res[2, 2])
+
+    def test__try_fl_mv_left__floatify_mv_right(self):
+        cs = ColSplitter()
+        cs._token_col_lengths = [2, -1, -1]
+
+        charr = np.chararray((2, 3), 5)
+        charr[0, 0] = cs._null
+        charr[0, 1] = '23'
+        charr[0, 2] = cs._null
+
+        charr[1, 0] = cs._null
+        charr[1, 1] = '5'
+        charr[1, 2] = cs._null
+
+        res = cs._try_fl_mv_left__floatify_mv_right(charr, 0, 1)
+        self.assertEqual(b'23', res[0, 0])
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(cs._null, res[0, 2])
+
+        res = cs._try_fl_mv_left__floatify_mv_right(charr, 1, 1)
+        self.assertEqual(cs._null, res[1, 0])
+        self.assertEqual(cs._null, res[1, 1])
+        self.assertEqual(b'5.0', res[1, 2])
+
+    def test__try_fl_mv_left__mv_right(self):
+        cs = ColSplitter()
+        cs._token_col_lengths = [2, -1, -1]
+
+        charr = np.chararray((2, 3), 5)
+        charr[0, 0] = cs._null
+        charr[0, 1] = 'ab'
+        charr[0, 2] = cs._null
+
+        charr[1, 0] = cs._null
+        charr[1, 1] = 'cde'
+        charr[1, 2] = cs._null
+
+        res = cs._try_fl_mv_left__mv_right(charr, 0, 1)
+        self.assertEqual(b'ab', res[0, 0])
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(cs._null, res[0, 2])
+
+        res = cs._try_fl_mv_left__mv_right(charr, 1, 1)
+        self.assertEqual(cs._null, res[1, 0])
+        self.assertEqual(cs._null, res[1, 1])
+        self.assertEqual(b'cde', res[1, 2])
+
+    def test__try_fl_mv_right__mv_left(self):
+        cs = ColSplitter()
+        cs._token_col_lengths = [-1, -1, 2]
+
+        charr = np.chararray((2, 3), 5)
+        charr[0, 0] = cs._null
+        charr[0, 1] = 'ab'
+        charr[0, 2] = cs._null
+
+        charr[1, 0] = cs._null
+        charr[1, 1] = 'cde'
+        charr[1, 2] = cs._null
+
+        res = cs._try_fl_mv_right__mv_left(charr, 0, 1)
+        self.assertEqual(cs._null, res[0, 0])
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(b'ab', res[0, 2])
+
+        res = cs._try_fl_mv_right__mv_left(charr, 1, 1)
+        self.assertEqual(b'cde', res[1, 0])
+        self.assertEqual(cs._null, res[1, 1])
+        self.assertEqual(cs._null, res[1, 2])
+
+    def test__try_fl_mv_left_concat_right(self):
+        cs = ColSplitter()
+        cs._token_col_lengths = [2, -1, -1]
+
+        charr = np.chararray((2, 3), 5)
+        charr[0, 0] = cs._null
+        charr[0, 1] = 'ab'
+        charr[0, 2] = 'cdef'
+
+        charr[1, 0] = cs._null
+        charr[1, 1] = 'ghi'
+        charr[1, 2] = 'jklm'
+
+        res = cs._try_fl_mv_left_concat_right(charr, 0, 1)
+        self.assertEqual(b'ab', res[0, 0])
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(b'cdef', res[0, 2])
+
+        res = cs._try_fl_mv_left_concat_right(charr, 1, 1)
+        self.assertEqual(cs._null, res[1, 0])
+        self.assertEqual(cs._null, res[1, 1])
+        self.assertEqual(b'ghi jklm', res[1, 2])
+
+    def test__try_fl_mv_right_concat_left(self):
+        cs = ColSplitter()
+        cs._token_col_lengths = [-1, -1, 2]
+
+        charr = np.chararray((2, 3), 5)
+        charr[0, 0] = 'cdef'
+        charr[0, 1] = 'ab'
+        charr[0, 2] = cs._null
+
+        charr[1, 0] = 'ghij'
+        charr[1, 1] = 'klm'
+        charr[1, 2] = cs._null
+
+        res = cs._try_fl_mv_right_concat_left(charr, 0, 1)
+        self.assertEqual(b'cdef', res[0, 0])
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(b'ab', res[0, 2])
+
+        res = cs._try_fl_mv_right_concat_left(charr, 1, 1)
+        self.assertEqual(b'ghij klm', res[1, 0])
+        self.assertEqual(cs._null, res[1, 1])
+        self.assertEqual(cs._null, res[1, 2])
+
+    def test__concat_left(self):
+        cs = ColSplitter()
+
+        charr = np.chararray((1, 3), 5)
+        charr[0, 0] = 'abc'
+        charr[0, 1] = 'def'
+        charr[0, 2] = 'ghi'
+
+        res = cs._concat_left(charr, 0, 1)
+        self.assertEqual(b'abc def', res[0, 0])
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(b'ghi', res[0, 2])
+
+    def test__concat_right(self):
+        cs = ColSplitter()
+
+        charr = np.chararray((1, 3), 5)
+        charr[0, 0] = 'abc'
+        charr[0, 1] = 'def'
+        charr[0, 2] = 'ghi'
+
+        res = cs._concat_right(charr, 0, 1)
+        self.assertEqual(b'abc', res[0, 0])
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(b'def ghi', res[0, 2])
+
+    def test__floatify_move_left(self):
+        cs = ColSplitter()
+
+        charr = np.chararray((1, 3), 5)
+        charr[0, 0] = cs._null
+        charr[0, 1] = '23'
+        charr[0, 2] = cs._null
+
+        res = cs._floatify_move_left(charr, 0, 1)
+        self.assertEqual(b'23.0', res[0, 0])
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(cs._null, res[0, 2])
+
+    def test__floatify_move_right(self):
+        cs = ColSplitter()
+
+        charr = np.chararray((1, 3), 5)
+        charr[0, 0] = cs._null
+        charr[0, 1] = '23'
+        charr[0, 2] = cs._null
+
+        res = cs._floatify_move_right(charr, 0, 1)
+        self.assertEqual(cs._null, res[0, 0])
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(b'23.0', res[0, 2])
+
+    def test__merge_cols(self):
+        cs = ColSplitter()
+        cs._token_col_types = [cs._int, cs._float]
+        cs._token_col_lengths = [-1, -1]
+
+        charr = np.chararray((7, 2), 5)
+        charr[0, 0] = cs._null
+        charr[1, 0] = '23'
+        charr[2, 0] = cs._null
+        charr[3, 0] = cs._null
+        charr[4, 0] = '42'
+        charr[5, 0] = '123'
+        charr[6, 0] = cs._null
+
+        charr[0, 1] = '12.0'
+        charr[1, 1] = cs._null
+        charr[2, 1] = '13.0'
+        charr[3, 1] = cs._null
+        charr[4, 1] = cs._null
+        charr[5, 1] = cs._null
+        charr[6, 1] = cs._null
+
+        res = cs._merge_cols(charr)
+        # self.assertEqual((5, 1), res.shape)
+        self.assertEqual(b'12', res[0, 0])
+        self.assertEqual(b'23', res[1, 0])
+        self.assertEqual(b'13', res[2, 0])
+        self.assertEqual(cs._null, res[3, 0])
+        self.assertEqual(b'42', res[4, 0])
