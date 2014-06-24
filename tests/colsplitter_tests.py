@@ -131,20 +131,20 @@ class TestColSplitter(unittest.TestCase):
 
         charr = np.chararray((10, 3), 5)
         vals1 = [cs._null, 'one', cs._null, 'two', cs._null, cs._null,
-            'three', cs._null, cs._null, cs._null]
+                 'three', cs._null, cs._null, cs._null]
         vals2 = [cs._null, 'one', cs._null, cs._null, cs._null, cs._null,
-            'two', cs._null, cs._null, cs._null]
+                 'two', cs._null, cs._null, cs._null]
         vals3 = ['NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'NULL', 'one',
-            'NULL', 'NULL', 'NULL']
-        
+                 'NULL', 'NULL', 'NULL']
+
         for i in range(10):
-            charr[i,0] = vals1[i]
-            charr[i,1] = vals2[i]
-            charr[i,2] = vals3[i]
-        
-        self.assertFalse(cs._is_sparse(charr[:,0]))
-        self.assertTrue(cs._is_sparse(charr[:,1]))
-        self.assertTrue(cs._is_sparse(charr[:,2]))
+            charr[i, 0] = vals1[i]
+            charr[i, 1] = vals2[i]
+            charr[i, 2] = vals3[i]
+
+        self.assertFalse(cs._is_sparse(charr[:, 0]))
+        self.assertTrue(cs._is_sparse(charr[:, 1]))
+        self.assertTrue(cs._is_sparse(charr[:, 2]))
 
     def test__try_intify_mv_left(self):
         cs = ColSplitter()
@@ -628,3 +628,635 @@ class TestColSplitter(unittest.TestCase):
         self.assertEqual(b'13', res[2, 0])
         self.assertEqual(cs._null, res[3, 0])
         self.assertEqual(b'42', res[4, 0])
+
+    def test__has_idx_clash(self):
+        cs = ColSplitter()
+        charr = np.chararray((5, 3), 5)
+
+        charr[0, 0] = cs._null
+        charr[1, 0] = 'a'
+        charr[2, 0] = cs._null
+        charr[3, 0] = 'b'
+        charr[4, 0] = cs._null
+
+        charr[0, 1] = 'c'
+        charr[1, 1] = cs._null
+        charr[2, 1] = 'd'
+        charr[3, 1] = cs._null
+        charr[4, 1] = cs._null
+
+        charr[0, 2] = 'e'
+        charr[1, 2] = cs._null
+        charr[2, 2] = 'f'
+        charr[3, 2] = 'g'
+        charr[4, 2] = cs._null
+
+        self.assertFalse(cs._has_index_clash(charr, 0, 1))
+        self.assertTrue(cs._has_index_clash(charr, 0, 2))
+
+    def test__try_combine_1(self):
+        cs = ColSplitter()
+        cs._token_col_lengths = [2, -5, -6, 2, -1]
+        cs._token_col_types = [cs._str, cs._float, cs._int, cs._str, cs._int]
+
+        charr = np.chararray((5, 5), 5)
+
+        # column 0: should be combined with col 3
+        charr[0, 0] = cs._null
+        charr[1, 0] = 'ab'
+        charr[2, 0] = cs._null
+        charr[3, 0] = 'cd'
+        charr[4, 0] = cs._null
+
+        # column 1: no combination
+        charr[0, 1] = cs._null
+        charr[1, 1] = '12.3'
+        charr[2, 1] = '45.6'
+        charr[3, 1] = cs._null
+        charr[4, 1] = cs._null
+
+        # column 2: no combination
+        charr[0, 2] = '11'
+        charr[1, 2] = cs._null
+        charr[2, 2] = '13'
+        charr[3, 2] = '14'
+        charr[4, 2] = cs._null
+
+        # column 3: combines with col 0
+        charr[0, 3] = 'mn'
+        charr[1, 3] = cs._null
+        charr[2, 3] = 'op'
+        charr[3, 3] = cs._null
+        charr[4, 3] = 'qr'
+
+        # column 4: no combination
+        charr[0, 4] = cs._null
+        charr[1, 4] = '12'
+        charr[2, 4] = cs._null
+        charr[3, 4] = cs._null
+        charr[4, 4] = '15'
+
+        res = cs._try_combine(charr, 3, 0)
+
+        self.assertEqual((5, 7), res.shape)
+        self.assertEqual([2, -5, -6, 2, -5, -6, -1],
+                         cs._token_col_lengths)
+        self.assertEqual([cs._str, cs._float, cs._int, cs._str, cs._float,
+                          cs._int, cs._int],
+                         cs._token_col_types)
+
+        # column 0
+        self.assertEqual(cs._null, res[0, 0])
+        self.assertEqual(cs._null, res[1, 0])
+        self.assertEqual(cs._null, res[2, 0])
+        self.assertEqual(cs._null, res[3, 0])
+        self.assertEqual(cs._null, res[4, 0])
+        # column 1
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(cs._null, res[1, 1])
+        self.assertEqual(b'45.6', res[2, 1])
+        self.assertEqual(cs._null, res[3, 1])
+        self.assertEqual(cs._null, res[4, 1])
+        # column 2
+        self.assertEqual(b'11', res[0, 2])
+        self.assertEqual(cs._null, res[1, 2])
+        self.assertEqual(b'13', res[2, 2])
+        self.assertEqual(cs._null, res[3, 2])
+        self.assertEqual(cs._null, res[4, 2])
+        # column 3
+        self.assertEqual(b'mn', res[0, 3])
+        self.assertEqual(b'ab', res[1, 3])
+        self.assertEqual(b'op', res[2, 3])
+        self.assertEqual(b'cd', res[3, 3])
+        self.assertEqual(b'qr', res[4, 3])
+        # column 4
+        self.assertEqual(cs._null, res[0, 4])
+        self.assertEqual(b'12.3', res[1, 4])
+        self.assertEqual(cs._null, res[2, 4])
+        self.assertEqual(cs._null, res[3, 4])
+        self.assertEqual(cs._null, res[4, 4])
+        # column 5
+        self.assertEqual(cs._null, res[0, 5])
+        self.assertEqual(cs._null, res[1, 5])
+        self.assertEqual(cs._null, res[2, 5])
+        self.assertEqual(b'14', res[3, 5])
+        self.assertEqual(cs._null, res[4, 5])
+        # column 6
+        self.assertEqual(cs._null, res[0, 6])
+        self.assertEqual(b'12', res[1, 6])
+        self.assertEqual(cs._null, res[2, 6])
+        self.assertEqual(cs._null, res[3, 6])
+        self.assertEqual(b'15', res[4, 6])
+
+    def test__try_combine_2(self):
+        cs = ColSplitter()
+        cs._token_col_lengths = [2, -5, -6, 2, -1]
+        cs._token_col_types = [cs._str, cs._float, cs._int, cs._str, cs._int]
+
+        charr = np.chararray((5, 5), 5)
+
+        # column 0: no combination
+        charr[0, 0] = cs._null
+        charr[1, 0] = 'ab'
+        charr[2, 0] = cs._null
+        charr[3, 0] = 'cd'
+        charr[4, 0] = cs._null
+
+        # column 1: no combination
+        charr[0, 1] = cs._null
+        charr[1, 1] = '12.3'
+        charr[2, 1] = '45.6'
+        charr[3, 1] = cs._null
+        charr[4, 1] = cs._null
+
+        # column 2: should be combined with col 4
+        charr[0, 2] = '11'
+        charr[1, 2] = cs._null
+        charr[2, 2] = '13'
+        charr[3, 2] = '14'
+        charr[4, 2] = cs._null
+
+        # column 3: no combination
+        charr[0, 3] = 'mn'
+        charr[1, 3] = cs._null
+        charr[2, 3] = 'op'
+        charr[3, 3] = cs._null
+        charr[4, 3] = 'qr'
+
+        # column 4: combines with col 2
+        charr[0, 4] = cs._null
+        charr[1, 4] = '12'
+        charr[2, 4] = cs._null
+        charr[3, 4] = cs._null
+        charr[4, 4] = '15'
+
+        res = cs._try_combine(charr, 4, 2)
+        self.assertEqual((5, 6), res.shape)
+        self.assertEqual([2, -5, -6, 2, -1, 2],
+                         cs._token_col_lengths)
+        self.assertEqual([cs._str, cs._float, cs._int, cs._str, cs._int,
+                          cs._str],
+                         cs._token_col_types)
+        # column 0
+        self.assertEqual(cs._null, res[0, 0])
+        self.assertEqual(b'ab', res[1, 0])
+        self.assertEqual(cs._null, res[2, 0])
+        self.assertEqual(b'cd', res[3, 0])
+        self.assertEqual(cs._null, res[4, 0])
+        # column 1
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(b'12.3', res[1, 1])
+        self.assertEqual(b'45.6', res[2, 1])
+        self.assertEqual(cs._null, res[3, 1])
+        self.assertEqual(cs._null, res[4, 1])
+        # column 2
+        self.assertEqual(cs._null, res[0, 2])
+        self.assertEqual(cs._null, res[1, 2])
+        self.assertEqual(cs._null, res[2, 2])
+        self.assertEqual(cs._null, res[3, 2])
+        self.assertEqual(cs._null, res[4, 2])
+        # column 3
+        self.assertEqual(cs._null, res[0, 3])
+        self.assertEqual(cs._null, res[1, 3])
+        self.assertEqual(cs._null, res[2, 3])
+        self.assertEqual(cs._null, res[3, 3])
+        self.assertEqual(b'qr', res[4, 3])
+        # column 4
+        self.assertEqual(b'11', res[0, 4])
+        self.assertEqual(b'12', res[1, 4])
+        self.assertEqual(b'13', res[2, 4])
+        self.assertEqual(b'14', res[3, 4])
+        self.assertEqual(b'15', res[4, 4])
+        # column 5
+        self.assertEqual(b'mn', res[0, 5])
+        self.assertEqual(cs._null, res[1, 5])
+        self.assertEqual(b'op', res[2, 5])
+        self.assertEqual(cs._null, res[3, 5])
+        self.assertEqual(cs._null, res[4, 5])
+
+    def test__merge_vstr_cols(self):
+        cs = ColSplitter()
+        cs._token_col_lengths = [-1, -1, 2, 2]
+        cs._token_col_types = [cs._str, cs._str, cs._str, cs._str]
+
+        charr = np.chararray((5, 4), 5)
+
+        charr[0, 0] = 'abc'
+        charr[1, 0] = cs._null
+        charr[2, 0] = 'jkl'
+        charr[3, 0] = 'mn'
+        charr[4, 0] = cs._null
+
+        charr[0, 1] = 'def'
+        charr[1, 1] = 'ghi'
+        charr[2, 1] = cs._null
+        charr[3, 1] = 'op'
+        charr[4, 1] = cs._null
+
+        charr[0, 2] = 'qr'
+        charr[1, 2] = 'uv'
+        charr[2, 2] = cs._null
+        charr[3, 2] = 'yz'
+        charr[4, 2] = cs._null
+
+        charr[0, 3] = 'st'
+        charr[1, 3] = cs._null
+        charr[2, 3] = 'wx'
+        charr[3, 3] = cs._null
+        charr[4, 3] = cs._null
+
+        res = cs._merge_vstr_cols(charr)
+
+        self.assertEqual((5, 3), res.shape)
+
+        self.assertEqual(b'abc def', res[0, 0])
+        self.assertEqual(b'ghi', res[1, 0])
+        self.assertEqual(b'jkl', res[2, 0])
+        self.assertEqual(b'mn op', res[3, 0])
+        self.assertEqual(cs._null, res[4, 0])
+
+        self.assertEqual(b'qr', res[0, 1])
+        self.assertEqual(b'uv', res[1, 1])
+        self.assertEqual(cs._null, res[2, 1])
+        self.assertEqual(b'yz', res[3, 1])
+        self.assertEqual(cs._null, res[4, 1])
+
+        self.assertEqual(b'st', res[0, 2])
+        self.assertEqual(cs._null, res[1, 2])
+        self.assertEqual(b'wx', res[2, 2])
+        self.assertEqual(cs._null, res[3, 2])
+        self.assertEqual(cs._null, res[4, 2])
+
+    def test__try_combine_cols(self):
+        cs = ColSplitter()
+        cs._token_col_lengths = [2, -5, -6, 2, -1]
+        cs._token_col_types = [cs._str, cs._float, cs._int, cs._str, cs._int]
+
+        charr = np.chararray((5, 5), 5)
+
+        # column 0: should be combined with col 3
+        charr[0, 0] = cs._null
+        charr[1, 0] = 'ab'
+        charr[2, 0] = cs._null
+        charr[3, 0] = 'cd'
+        charr[4, 0] = cs._null
+
+        # column 1: no combination
+        charr[0, 1] = cs._null
+        charr[1, 1] = '12.3'
+        charr[2, 1] = '45.6'
+        charr[3, 1] = cs._null
+        charr[4, 1] = cs._null
+
+        # column 2: no combination
+        charr[0, 2] = '11'
+        charr[1, 2] = cs._null
+        charr[2, 2] = '13'
+        charr[3, 2] = '14'
+        charr[4, 2] = cs._null
+
+        # column 3: combines with col 0
+        charr[0, 3] = 'mn'
+        charr[1, 3] = cs._null
+        charr[2, 3] = 'op'
+        charr[3, 3] = cs._null
+        charr[4, 3] = 'qr'
+
+        # column 4: no combination
+        charr[0, 4] = cs._null
+        charr[1, 4] = '12'
+        charr[2, 4] = cs._null
+        charr[3, 4] = cs._null
+        charr[4, 4] = '15'
+
+        res = cs._try_combine_cols(charr)
+
+        self.assertEqual((5, 8), res.shape)
+        self.assertEqual([2, -5, -6, 2, -5, -6, -1, 2],
+                         cs._token_col_lengths)
+        self.assertEqual([cs._str, cs._float, cs._int, cs._str, cs._float,
+                          cs._int, cs._int, cs._str],
+                         cs._token_col_types)
+
+        # column 0
+        self.assertEqual(cs._null, res[0, 0])
+        self.assertEqual(cs._null, res[1, 0])
+        self.assertEqual(cs._null, res[2, 0])
+        self.assertEqual(cs._null, res[3, 0])
+        self.assertEqual(cs._null, res[4, 0])
+        # column 1
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(cs._null, res[1, 1])
+        self.assertEqual(b'45.6', res[2, 1])
+        self.assertEqual(cs._null, res[3, 1])
+        self.assertEqual(cs._null, res[4, 1])
+        # column 2
+        self.assertEqual(cs._null, res[0, 2])
+        self.assertEqual(cs._null, res[1, 2])
+        self.assertEqual(cs._null, res[2, 2])
+        self.assertEqual(cs._null, res[3, 2])
+        self.assertEqual(cs._null, res[4, 2])
+        # column 3
+        self.assertEqual(cs._null, res[0, 3])
+        self.assertEqual(b'ab', res[1, 3])
+        self.assertEqual(cs._null, res[2, 3])
+        self.assertEqual(b'cd', res[3, 3])
+        self.assertEqual(b'qr', res[4, 3])
+        # column 4
+        self.assertEqual(cs._null, res[0, 4])
+        self.assertEqual(b'12.3', res[1, 4])
+        self.assertEqual(cs._null, res[2, 4])
+        self.assertEqual(cs._null, res[3, 4])
+        self.assertEqual(cs._null, res[4, 4])
+        # column 5
+        self.assertEqual(cs._null, res[0, 5])
+        self.assertEqual(cs._null, res[1, 5])
+        self.assertEqual(cs._null, res[2, 5])
+        self.assertEqual(cs._null, res[3, 5])
+        self.assertEqual(cs._null, res[4, 5])
+        # column 6
+        self.assertEqual(b'11', res[0, 6])
+        self.assertEqual(b'12', res[1, 6])
+        self.assertEqual(b'13', res[2, 6])
+        self.assertEqual(b'14', res[3, 6])
+        self.assertEqual(b'15', res[4, 6])
+        # column 7
+        self.assertEqual(b'mn', res[0, 7])
+        self.assertEqual(cs._null, res[1, 7])
+        self.assertEqual(b'op', res[2, 7])
+        self.assertEqual(cs._null, res[3, 7])
+        self.assertEqual(cs._null, res[4, 7])
+
+    def test__merge_col_to_left(self):
+        cs = ColSplitter()
+
+        charr = np.chararray((3, 2), 5)
+
+        charr[0, 0] = cs._null
+        charr[1, 0] = cs._null
+        charr[2, 0] = 'abc'
+
+        charr[0, 1] = cs._null
+        charr[1, 1] = 'def'
+        charr[2, 1] = 'ghi'
+
+        res = cs._merge_col_to_left(charr, 1)
+
+        self.assertEqual(cs._null, res[0, 0])
+        self.assertEqual(b'def', res[1, 0])
+        self.assertEqual(b'abc ghi', res[2, 0])
+
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(cs._null, res[1, 1])
+        self.assertEqual(cs._null, res[2, 1])
+
+    def test__push_to_right(self):
+        cs = ColSplitter()
+
+        charr = np.chararray((3, 4), 5)
+        charr.fill(cs._null)
+
+        charr[1, 0] = 'a'
+        charr[1, 1] = 'b'
+        charr[1, 2] = 'c'
+
+        res = cs._push_to_right(charr, 1, 0)
+
+        self.assertEqual(cs._null, res[0, 0])
+        self.assertEqual(cs._null, res[1, 0])
+        self.assertEqual(cs._null, res[2, 0])
+
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(b'a', res[1, 1])
+        self.assertEqual(cs._null, res[2, 1])
+
+        self.assertEqual(cs._null, res[0, 2])
+        self.assertEqual(b'b', res[1, 2])
+        self.assertEqual(cs._null, res[2, 2])
+
+        self.assertEqual(cs._null, res[0, 3])
+        self.assertEqual(b'c', res[1, 3])
+        self.assertEqual(cs._null, res[2, 3])
+
+        res = cs._push_to_right(charr, 1, 1)
+
+        self.assertEqual((3, 5), res.shape)
+
+        self.assertEqual(cs._null, res[0, 0])
+        self.assertEqual(cs._null, res[1, 0])
+        self.assertEqual(cs._null, res[2, 0])
+
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(cs._null, res[1, 1])
+        self.assertEqual(cs._null, res[2, 1])
+
+        self.assertEqual(cs._null, res[0, 2])
+        self.assertEqual(b'a', res[1, 2])
+        self.assertEqual(cs._null, res[2, 2])
+
+        self.assertEqual(cs._null, res[0, 3])
+        self.assertEqual(b'b', res[1, 3])
+        self.assertEqual(cs._null, res[2, 3])
+
+        self.assertEqual(cs._null, res[0, 4])
+        self.assertEqual(b'c', res[1, 4])
+        self.assertEqual(cs._null, res[2, 4])
+
+    def test__mv_from_vstr_col(self):
+        cs = ColSplitter()
+        cs._considered_lengths = [2, 3]
+        cs._token_col_lengths = [-1, -1]
+
+        charr = np.chararray((3, 2), 5)
+
+        charr[0, 0] = cs._null
+        charr[1, 0] = cs._null
+        charr[2, 0] = cs._null
+
+        charr[0, 1] = cs._null
+        charr[1, 1] = b'abcde'
+        charr[2, 1] = b'fg'
+
+        res = cs._mv_from_vstr_col(charr, 1, cs._str)
+
+        self.assertEqual((3, 3), res.shape)
+
+        self.assertEqual(cs._null, res[0, 0])
+        self.assertEqual(cs._null, res[1, 0])
+        self.assertEqual(cs._null, res[2, 0])
+
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(b'abcde', res[1, 1])
+        self.assertEqual(cs._null, res[2, 1])
+
+        self.assertEqual(cs._null, res[0, 2])
+        self.assertEqual(cs._null, res[1, 2])
+        self.assertEqual(b'fg', res[2, 2])
+
+        cs._token_col_lengths = [2, -1]
+
+        charr = np.chararray((4, 2), 5)
+
+        charr[0, 0] = cs._null
+        charr[1, 0] = cs._null
+        charr[2, 0] = cs._null
+        charr[3, 0] = cs._null
+
+        charr[0, 1] = cs._null
+        charr[1, 1] = b'abcde'
+        charr[2, 1] = b'fg'
+        charr[3, 1] = b'hij'
+
+        res = cs._mv_from_vstr_col(charr, 1, cs._str)
+
+        self.assertEqual((4, 3), res.shape)
+
+        self.assertEqual(cs._null, res[0, 0])
+        self.assertEqual(cs._null, res[1, 0])
+        self.assertEqual(b'fg', res[2, 0])
+        self.assertEqual(cs._null, res[3, 0])
+
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(b'abcde', res[1, 1])
+        self.assertEqual(cs._null, res[2, 1])
+        self.assertEqual(cs._null, res[3, 1])
+
+        self.assertEqual(cs._null, res[0, 2])
+        self.assertEqual(cs._null, res[1, 2])
+        self.assertEqual(cs._null, res[2, 2])
+        self.assertEqual(b'hij', res[3, 2])
+
+    def test__get_col_fixed_len(self):
+        cs = ColSplitter()
+        cs._considered_lengths = [2, 3]
+
+        charr = np.chararray((5, 2), 5)
+
+        charr[0, 0] = 'ab'
+        charr[1, 0] = 'cde'
+        charr[2, 0] = 'fgh'
+        charr[3, 0] = 'ijhkl'
+        charr[4, 0] = 'mn'
+
+        charr[0, 1] = 'ab'
+        charr[1, 1] = 'cde'
+        charr[2, 1] = 'fgh'
+        charr[3, 1] = 'ijhkl'
+        charr[4, 1] = 'mno'
+
+        res = cs._get_col_fixed_len(charr[:, 0])
+        self.assertEqual(2, res)
+
+        res = cs._get_col_fixed_len(charr[:, 1])
+        self.assertEqual(3, res)
+
+    def test__mv_from_fstr_col(self):
+        cs = ColSplitter()
+        cs._considered_lengths = [2, 3]
+        cs._token_col_lengths = [-1, 3]
+        cs._considered_lengths = [2, 3, 4]
+
+        charr = np.chararray((4, 2), 5)
+
+        charr[0, 0] = cs._null
+        charr[1, 0] = cs._null
+        charr[2, 0] = cs._null
+        charr[3, 0] = cs._null
+
+        charr[0, 1] = cs._null
+        charr[1, 1] = 'abcde'
+        charr[2, 1] = 'fg'
+        charr[3, 1] = 'hij'
+
+        res = cs._mv_from_fstr_col(charr, 1, 3)
+
+        self.assertEqual((4, 3), res.shape)
+
+        self.assertEqual(cs._null, res[0, 0])
+        self.assertEqual(cs._null, res[1, 0])
+        self.assertEqual(cs._null, res[2, 0])
+        self.assertEqual(cs._null, res[3, 0])
+
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(cs._null, res[1, 1])
+        self.assertEqual(cs._null, res[2, 1])
+        self.assertEqual(b'hij', res[3, 1])
+
+        self.assertEqual(cs._null, res[0, 2])
+        self.assertEqual(b'abcde', res[1, 2])
+        self.assertEqual(b'fg', res[2, 2])
+        self.assertEqual(cs._null, res[2, 0])
+
+        cs._token_col_lengths = [2, 3]
+
+        charr = np.chararray((4, 2), 5)
+
+        charr[0, 0] = cs._null
+        charr[1, 0] = cs._null
+        charr[2, 0] = cs._null
+        charr[3, 0] = cs._null
+
+        charr[0, 1] = cs._null
+        charr[1, 1] = 'abcde'
+        charr[2, 1] = 'fg'
+        charr[3, 1] = 'hij'
+
+        res = cs._mv_from_fstr_col(charr, 1, 3)
+
+        self.assertEqual((4, 3), res.shape)
+
+        self.assertEqual(cs._null, res[0, 0])
+        self.assertEqual(cs._null, res[1, 0])
+        self.assertEqual(b'fg', res[2, 0])
+        self.assertEqual(cs._null, res[3, 0])
+
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(cs._null, res[1, 1])
+        self.assertEqual(cs._null, res[2, 1])
+        self.assertEqual(b'hij', res[3, 1])
+
+        self.assertEqual(cs._null, res[0, 2])
+        self.assertEqual(b'abcde', res[1, 2])
+        self.assertEqual(cs._null, res[2, 2])
+        self.assertEqual(cs._null, res[2, 2])
+
+    def test__mv_from_non_str_col(self):
+        cs = ColSplitter()
+        cs._considered_lengths = [2, 3]
+        cs._token_col_lengths = [3]
+
+        charr = np.chararray((5, 2), 5)
+
+        charr[0, 0] = cs._null
+        charr[1, 0] = cs._null
+        charr[2, 0] = 'abc'
+        charr[3, 0] = cs._null
+        charr[4, 0] = cs._null
+
+        charr[0, 1] = cs._null
+        charr[1, 1] = '42'
+        charr[2, 1] = 'fgh'
+        charr[3, 1] = 'fg'
+        charr[4, 1] = 'ijk'
+
+        res = cs._mv_from_non_str_col(charr, 1, cs._int, cs._str)
+
+        self.assertEqual((5, 3), res.shape)
+
+        self.assertEqual(cs._null, res[0, 0])
+        self.assertEqual(cs._null, res[1, 0])
+        self.assertEqual(b'abc', res[2, 0])
+        self.assertEqual(cs._null, res[3, 0])
+        self.assertEqual(b'ijk', res[4, 0])
+
+        self.assertEqual(cs._null, res[0, 1])
+        self.assertEqual(b'42', res[1, 1])
+        self.assertEqual(cs._null, res[2, 1])
+        self.assertEqual(cs._null, res[3, 1])
+        self.assertEqual(cs._null, res[4, 1])
+
+        self.assertEqual(cs._null, res[0, 2])
+        self.assertEqual(cs._null, res[1, 2])
+        self.assertEqual(b'fgh', res[2, 2])
+        self.assertEqual(b'fg', res[3, 2])
+        self.assertEqual(cs._null, res[4, 2])

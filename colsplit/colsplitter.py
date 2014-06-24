@@ -495,6 +495,7 @@ class ColSplitter(object):
             (STR, T, T, INT, F, INT, F, T): self._mv_right,
             (STR, T, T, INT, F, INT, F, F): self._try_fl_mv_left,
             (STR, T, T, INT, F, FLT, F, T): self._try_fl_mv_left__floatify_mv_right,
+            (STR, T, T, INT, F, FLT, F, T): self._floatify_move_right,
             (STR, T, T, INT, F, FLT, F, F): self._try_fl_mv_left,
             (STR, T, T, INT, F, STR, T, T): self._try_fl_mv,
             (STR, T, T, INT, F, STR, T, F): self._try_fl_mv_left,
@@ -613,7 +614,7 @@ class ColSplitter(object):
             (STR, F, F, STR, F, STR, T, T): self._try_fl_mv_right_concat_left,
             (STR, F, F, STR, F, STR, T, F): self._concat_left,
             (STR, F, F, STR, F, STR, F, T): self._concat_left,  # TODO: discuss
-            (STR, F, F, STR, F, STR, F, F): self._concat_left, 
+            (STR, F, F, STR, F, STR, F, F): self._concat_left,
             (STR, F, F, STR, F, NVD, F, F): self._concat_left,
             (NVD, F, F, INT, F, INT, F, T): self._mv_right,
             # (NVD, F, F, INT, F, INT, F, F): self.dummy,  # TODO: discuss
@@ -695,6 +696,7 @@ class ColSplitter(object):
                 [self._null]*(self._max_line_tokens-num_tokens)
             arr[i] = arr_line
         return arr
+
     def _get_type(self, token):
         if token == self._null:
             token_type = self._null_type
@@ -717,7 +719,8 @@ class ColSplitter(object):
 
     def _col_has_non_fixed_len_str_vals(self, col):
         for value in col:
-            if len(value) not in self._considered_lengths:
+            if self._get_type(value) == self._str and \
+                    len(value) not in self._considered_lengths:
                 return True
 
         return False
@@ -742,7 +745,6 @@ class ColSplitter(object):
             else:
                 break
 
-        print(arr)
         return arr
 
     def __merge_cols(self, arr):
@@ -763,7 +765,8 @@ class ColSplitter(object):
                 fixed_len_rght_col = False
             else:
                 type_rght_col = self._token_col_types[token_col_nr+1]
-                fixed_len_rght_col = self._token_col_lengths[token_col_nr+1] > 0
+                fixed_len_rght_col = \
+                    self._token_col_lengths[token_col_nr+1] > 0
 
             line_counter = 0
             while line_counter < arr.shape[0]:
@@ -805,23 +808,23 @@ class ColSplitter(object):
         return arr
 
     def _is_empty(self, col):
-        num_non_null_vals = len(np.where(col!=self._null)[0])
+        num_non_null_vals = len(np.where(col != self._null)[0])
         return num_non_null_vals == 0
 
-    ##########################################################################
     def _find_combine_candidate_col(self, arr, tc_nr):
         # two cases:
         # 1) fstr col: find column with same str length
         # 2) non-str col: find column with same type
         if self._token_col_lengths[tc_nr] > 0:
             # 1)
-            for c in range(tc_nr-1, 0, -1):
-                if self._token_col_lengths[c]==self._token_col_lengths[tc_nr]:
+            for c in range(tc_nr-1, -1, -1):
+                if self._token_col_lengths[c] == \
+                        self._token_col_lengths[tc_nr]:
                     return c
-        elif self._token_col_types[tc_nr]!=self._str:
+        elif self._token_col_types[tc_nr] != self._str:
             # 2)
-            for c in range(tc_nr-1, 0, -1):
-                if self._token_col_types[c]==self._token_col_types[tc_nr]:
+            for c in range(tc_nr-1, -1, -1):
+                if self._token_col_types[c] == self._token_col_types[tc_nr]:
                     return c
 
     def _has_index_clash(self, arr, col_idx1, col_idx2):
@@ -836,10 +839,7 @@ class ColSplitter(object):
         return False
 
     def _try_combine(self, arr, tc_nr, combine_col_idx):
-        # TESTME!!!!
-        if self._has_index_clash(arr, tc_nr, combine_col_idx):
-            return arr
-        else:
+        if not self._has_index_clash(arr, tc_nr, combine_col_idx):
             delta = tc_nr - combine_col_idx
             # insert delta-1 columns right to tc_nr
             new_cols = np.chararray((arr.shape[0], delta-1),
@@ -852,23 +852,38 @@ class ColSplitter(object):
             arr = np.append(l_arr, new_cols, 1)
             arr = np.append(arr, r_arr, 1)
 
+            for i in range(combine_col_idx+1, tc_nr):
+                offset = i + delta
+                col_type = self._token_col_types[i]
+                self._token_col_types = self._token_col_types[:offset] + \
+                    [col_type] + self._token_col_types[offset:]
+
+                col_len = self._token_col_lengths[i]
+                self._token_col_lengths = self._token_col_lengths[:offset] + \
+                    [col_len] + self._token_col_lengths[offset:]
+
             line_idx = 0
-            while line_idx < arr[0]:
+            while line_idx < arr.shape[0]:
                 value = arr[line_idx, combine_col_idx]
-                if value!=self._null:
+                if value != self._null:
                     c = combine_col_idx
                     while c < tc_nr:
-                        arr[line_idx, c+delta] = arr[line_idx, c]
+                        offset = c + delta
+                        arr[line_idx, offset] = arr[line_idx, c]
+                        arr[line_idx, c] = self._null
                         c += 1
+
+                line_idx += 1
+        return arr
 
     def _merge_vstr_cols(self, arr):
         """
         - iterate over cols from right to left
         - 'sparse' vstr col --> check if left neighbor col is also vstr:
-          - yes: concat
+          - yes: concat left
         TODO: think about 'jumping over' type/fixed len cols
         """
-        token_col_nr = arr.shape[1] -1
+        token_col_nr = arr.shape[1] - 1
 
         while token_col_nr > 0:
             # if left neighbor and considered col are var length str cols
@@ -879,18 +894,41 @@ class ColSplitter(object):
 
                 if self._greedy_merge or self._is_sparse(arr[:, token_col_nr]):
                     arr = self._merge_col_to_left(arr, token_col_nr)
+
                     self._token_col_types.pop(token_col_nr)
                     self._token_col_lengths.pop(token_col_nr)
 
                     arr = np.delete(arr, (token_col_nr), 1)
+            token_col_nr -= 1
 
-            elif self._token_col_types[token_col_nr] != self._str or \
-                    self._token_col_lengths[token_col_nr]:
+        return arr
+
+    def _try_combine_cols(self, arr):
+        token_col_nr = arr.shape[1] - 1
+
+        border_idxs = [-1]
+        while token_col_nr > 0:
+            if self._is_empty(arr[:, token_col_nr]):
+                token_col_nr -= 1
+                continue
+
+            if token_col_nr <= border_idxs[-1]:
+                border_idxs.pop()
+
+            if self._token_col_types[token_col_nr] != self._str or \
+                    self._token_col_lengths[token_col_nr] > 0:
                 cand_col_idx = self._find_combine_candidate_col(arr,
                                                                 token_col_nr)
-                if cand_col_idx is not None:
+                if cand_col_idx is not None and \
+                        not self._is_empty(arr[:, cand_col_idx]) and \
+                        cand_col_idx > border_idxs[-1]:
+                    old_num_cols = arr.shape[1]
                     arr = self._try_combine(arr, token_col_nr, cand_col_idx)
-
+                    new_num_cols = arr.shape[1]
+                    # move token col position behind new inserted columns
+                    border_idxs.append(token_col_nr)
+                    if (new_num_cols - old_num_cols) > 0:
+                        token_col_nr += (new_num_cols - old_num_cols) + 1
             token_col_nr -= 1
         return arr
 
@@ -909,7 +947,7 @@ class ColSplitter(object):
             else:
                 # concat to left
                 arr = self._concat(arr, line_idx, token_col_nr-1,
-                                    token_col_nr, False)
+                                   token_col_nr, False)
 
             line_idx += 1
 
@@ -922,9 +960,9 @@ class ColSplitter(object):
         TODO: think about how this meaning of 'sparseness' relates to the
         self._len_threshold
         """
-        num_null_vals = len(np.where(col==self._null)[0])
+        num_null_vals = len(np.where(col == self._null)[0])
         num_vals = col.shape[0]
-        return (num_null_vals / num_vals ) >= self._threshold
+        return (num_null_vals / num_vals) >= self._threshold
 
     def _get_token_col_types(self, token_col):
         types = {}
@@ -965,7 +1003,7 @@ class ColSplitter(object):
                 predom_type_count = tc_type_count
 
         ratio = predom_type_count/whole_count
-        if ratio<threshold and self._str in tc_types.keys():
+        if ratio < threshold and self._str in tc_types.keys():
             predom_type = self._str
 
         return predom_type
@@ -990,12 +1028,20 @@ class ColSplitter(object):
         return left_col_type, right_col_type
 
     def _push_to_right(self, arr, line_idx, col_idx):
-        is_rightmost_col = col_idx+1==arr.shape[1]
+        is_rightmost_col = col_idx+1 == arr.shape[1]
 
         if not is_rightmost_col and arr[line_idx, col_idx+1] == self._null:
             arr[line_idx, col_idx+1] = arr[line_idx, col_idx]
         else:
-            c = arr.shape[1] - 2
+            rightmost_idx = arr.shape[1] - 1
+            if arr[line_idx, rightmost_idx] != self._null:
+                new_col = np.chararray((arr.shape[0], 1),
+                                       self._max_token_str_len)
+                new_col.fill(self._null)
+                arr = np.append(arr, new_col, 1)
+                arr[line_idx, rightmost_idx+1] = arr[line_idx, rightmost_idx]
+
+            c = rightmost_idx-1
 
             while c >= col_idx:
                 # copy to the right
@@ -1006,63 +1052,49 @@ class ColSplitter(object):
 
         return arr
 
-    def _mv_from_vstr_col(self, arr, tc_nr):
-        # TODO: add doc string
-
-        # two cases:
-        # 1) no insert check left needed --> left col is not fstr --> val is
-        #    pushed to right
-        # 2) insert check left needed --> left col is fstr
-
+    def _mv_from_vstr_col(self, arr, tc_nr, l_type):
         # in case we're in the leftmost token column l_len is set to -1 to not
         # move to the left
-        if tc_nr==0:
+        if tc_nr == 0:
             l_len = -1
         else:
             l_len = self._token_col_lengths[tc_nr-1]
 
-        if l_len < 0:
-            # 1) ==============================================================
-            line_idx = 0
-            while line_idx < arr.shape[0]:
-                # move values with len != column length
-                value = arr[line_idx, tc_nr]
-                if value != self._null and \
-                    len(value) in self._considered_lengths:
-
+        line_idx = 0
+        while line_idx < arr.shape[0]:
+            value = arr[line_idx, tc_nr]
+            val_len = len(value)
+            val_type = self._get_type(value)
+            # move values with len in self._considered_lengths
+            if value != self._null and (val_type != self._str or
+                                        val_len in self._considered_lengths):
+                # check if value can be moved to left
+                if val_len == l_len and val_type == l_type and \
+                        arr[line_idx, tc_nr-1] == self._null:
+                    # move left
+                    arr[line_idx, tc_nr-1] = value
+                    arr[line_idx, tc_nr] = self._null
+                else:
+                    # push to right
                     arr = self._push_to_right(arr, line_idx, tc_nr)
-                line_idx += 1
-
-        else:
-            # 2) ==============================================================
-            line_idx = 0
-            while line_idx < arr.shape[0]:
-                value = arr[line_idx, tc_nr]
-                val_len = len(value)
-                # move values with len in self._considered_lengths
-                if value != self._null and val_len in self._considered_lengths:
-                    # check if value can be moved to left
-                    if val_len==l_len and arr[line_idx, tc_nr-1]==self._null:
-                        # move left
-                        arr[line_idx, tc_nr-1] = value
-                        arr[line_idx, tc_nr] = self._null
-                    else:
-                        # push to right
-                        arr = self._push_to_right(arr, line_idx, tc_nr)
-                line_idx += 1
+            line_idx += 1
 
         return arr
 
-    # TODO: rename this method
     def _get_col_fixed_len(self, col):
         str_lens_counts = []
+        has_non_str_vals = False
         for str_len in self._considered_lengths:
             str_lens_counts.append(0)
 
         for value in col:
             if value == self._null:
                 continue
-            val_len = len(value)
+            if self._get_type(value) != self._str:
+                has_non_str_vals = True
+                continue
+            else:
+                val_len = len(value)
             for i in range(len(self._considered_lengths)):
                 if val_len == self._considered_lengths[i]:
                     count = str_lens_counts[i]
@@ -1076,9 +1108,9 @@ class ColSplitter(object):
         idx = str_lens_counts.index(max_count)
 
         str_lens_counts.pop(idx)
-        if max(str_lens_counts) == 0:
+        if len(str_lens_counts) == 0 and not has_non_str_vals:
             # col is homogeneous w.r.t. the string length, i.e. there is no
-            # 2nd most frequent string length 
+            # 2nd most frequent string length
             return None
 
         return self._considered_lengths[idx]
@@ -1094,7 +1126,7 @@ class ColSplitter(object):
 
         # in case we're in the leftmost token column l_len is set to -1 to not
         # move to the left
-        if tc_nr==0:
+        if tc_nr == 0:
             l_len = -1
         else:
             l_len = self._token_col_lengths[tc_nr-1]
@@ -1107,18 +1139,19 @@ class ColSplitter(object):
                 value = arr[line_idx, tc_nr]
                 if value != self._null and len(value) != tc_len:
                     arr = self._push_to_right(arr, line_idx, tc_nr)
-
                 line_idx += 1
 
         else:
             # 2) ==============================================================
             line_idx = 0
             while line_idx < arr.shape[0]:
+                value = arr[line_idx, tc_nr]
                 val_len = len(value)
                 # move values with len != column length
                 if value != self._null and val_len != tc_len:
                     # check if value can be moved to left
-                    if val_len==l_len and arr[line_idx, tc_nr-1]==self._null:
+                    if val_len == l_len and \
+                            arr[line_idx, tc_nr-1] == self._null:
                         # move left
                         arr[line_idx, tc_nr-1] = value
                         arr[line_idx, tc_nr] = self._null
@@ -1129,21 +1162,21 @@ class ColSplitter(object):
 
         return arr
 
-    def _mv_from_str_col(self, arr, tc_number):
+    def _mv_from_str_col(self, arr, tc_number, l_type):
         # strategy: move all fixed length strings to the right, that in the end
         # more fixed length string will be aggregated in one column
 
         if self._col_has_non_fixed_len_str_vals(arr[:, tc_number]):
             # move all fixed len string values
-            arr = self._mv_from_vstr_col(arr, tc_number)
+            arr = self._mv_from_vstr_col(arr, tc_number, l_type)
             self._token_col_lengths.append(-1)
         else:
             # set one string length for this column and move all values with a
             # different string length
             str_len = self._get_col_fixed_len(arr[:, tc_number])
             if str_len is None:
-                # either all non-Null values have same length or there are no
-                # non-null values
+                # there are no non-null values
+                self._token_col_lengths.append(-1)
                 return arr
             else:
                 arr = self._mv_from_fstr_col(arr, tc_number, str_len)
@@ -1152,34 +1185,39 @@ class ColSplitter(object):
         return arr
 
     def _mv_from_non_str_col(self, arr, tc_nr, tc_type, l_type):
-        
+        # TODO: doesn't really fit in here --> move!
+        if tc_nr == 0:
+            l_len = -1
+        else:
+            l_len = self._token_col_lengths[tc_nr-1]
+
         line_idx = 0
         while line_idx < arr.shape[0]:
             value = arr[line_idx, tc_nr]
             val_type = self._get_type(value)
+            val_len = len(value)
             if val_type != tc_type:
                 # try to move to left
-                if l_type==val_type and arr[line_idx, tc_nr]==self._null:
+                if l_type == val_type and l_len == val_len and \
+                        arr[line_idx, tc_nr-1] == self._null:
                     arr[line_idx, tc_nr-1] = value
                     arr[line_idx, tc_nr] = self._null
                 else:
-                    self._push_to_right(arr, line_idx, tc_nr)
+                    arr = self._push_to_right(arr, line_idx, tc_nr)
             line_idx += 1
         self._token_col_lengths.append(-1)
 
         return arr
 
     def _mv_from_col(self, arr, tc_nr, tc_type, l_col_type):
-
         if tc_type == self._str:
-            arr = self._mv_from_str_col(arr, tc_nr)
+            arr = self._mv_from_str_col(arr, tc_nr, l_col_type)
         else:
             arr = self._mv_from_non_str_col(arr, tc_nr, tc_type, l_col_type)
 
         return arr
 
     def _homogenize_token_col(self, arr, tc_nr, tc_types):
-
         tc_type = self._get_tc_col_type(tc_types)
 
         if tc_type is None:
@@ -1217,6 +1255,7 @@ class ColSplitter(object):
         self._token_col_types = []
         arr = self._homogenize(arr)
         arr = self._merge_vstr_cols(arr)
+        arr = self._try_combine_cols(arr)
         arr = self._merge_cols(arr)
 
         return arr
