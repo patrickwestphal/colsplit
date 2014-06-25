@@ -2,9 +2,6 @@ import numpy as np
 
 
 class ColSplitter(object):
-    """TODO: implement
-    TODO: test
-    """
 
     _int = 'int'
     _float = 'float'
@@ -396,7 +393,8 @@ class ColSplitter(object):
     # </merge action methods>
     ###########################################################################
 
-    def __init__(self, delimiter=' ', threshold=0.7):
+    def __init__(self, delimiter=' ', threshold=0.7,
+                 considered_fixed_lengths=[2, 3]):
 
         F = False
         T = True
@@ -643,12 +641,18 @@ class ColSplitter(object):
         # values (of a given length) that must exist to introduce a dedicated
         # fixed length string column TODO: make this configurable somehow
         self._len_threshold = 0.3
+        # This threshold determines how great the portion of values of a
+        # certain type must be to introduce an own column for them. 1.0 means,
+        # that the column must be totally homogeneous, 0.5 means that at least
+        # 50% of the column's values must be of this type and so on
+        # TODO: make this configurable somehow
+        self.own_column_threshold = 0.8
         # controls whether all adjacent string columns should be merged or
         # whether only sparse columns should be merged to their left neighbor
         # (if the neighbor col is also a str col with variable str length)
         # TODO: make this configurable somehow
         self._greedy_merge = True
-        self._considered_lengths = [2, 3]
+        self._considered_lengths = considered_fixed_lengths
         self._max_token_str_len = len(self._null)
         self._max_line_tokens = 0
         self._token_col_types = []
@@ -675,11 +679,11 @@ class ColSplitter(object):
             self._max_token_str_len = max(self._max_token_str_len, len(token))
 
             # append empty line token list if necessary
-            if self._line_counter >= len(self._line_tokens):
+            while self._line_counter >= len(self._line_tokens):
                     self._line_tokens.append([])
 
             # add token to line tokens
-            self._line_tokens[self._line_counter].append(token)
+            self._line_tokens[self._line_counter].append(token.strip())
 
         self._line_counter += 1
 
@@ -751,7 +755,6 @@ class ColSplitter(object):
         token_col_nr = arr.shape[1] - 1
 
         while token_col_nr > 0:
-
             # get neighbor column types
             type_left_col = self._token_col_types[token_col_nr-1]
             type_curr_col = self._token_col_types[token_col_nr]
@@ -989,9 +992,6 @@ class ColSplitter(object):
         # approach in the end more integer or float values will be aggregated
         # in one column
 
-        # FIXME: move to __init__ and make configurable
-        threshold = 0.8
-
         for tc_type in tc_types:
             whole_count += tc_types[tc_type]
             if tc_type == self._null_type:
@@ -1003,7 +1003,7 @@ class ColSplitter(object):
                 predom_type_count = tc_type_count
 
         ratio = predom_type_count/whole_count
-        if ratio < threshold and self._str in tc_types.keys():
+        if ratio < self.own_column_threshold and self._str in tc_types.keys():
             predom_type = self._str
 
         return predom_type
@@ -1083,7 +1083,7 @@ class ColSplitter(object):
 
     def _get_col_fixed_len(self, col):
         str_lens_counts = []
-        has_non_str_vals = False
+        # has_non_str_vals = False
         for str_len in self._considered_lengths:
             str_lens_counts.append(0)
 
@@ -1091,7 +1091,7 @@ class ColSplitter(object):
             if value == self._null:
                 continue
             if self._get_type(value) != self._str:
-                has_non_str_vals = True
+                # has_non_str_vals = True
                 continue
             else:
                 val_len = len(value)
@@ -1107,17 +1107,15 @@ class ColSplitter(object):
 
         idx = str_lens_counts.index(max_count)
 
-        str_lens_counts.pop(idx)
-        if len(str_lens_counts) == 0 and not has_non_str_vals:
-            # col is homogeneous w.r.t. the string length, i.e. there is no
-            # 2nd most frequent string length
-            return None
+        # str_lens_counts.pop(idx)
+        # if len(str_lens_counts) == 0 and not has_non_str_vals:
+        #     # col is homogeneous w.r.t. the string length, i.e. there is no
+        #     # 2nd most frequent string length
+        #     return None
 
         return self._considered_lengths[idx]
 
     def _mv_from_fstr_col(self, arr, tc_nr, tc_len):
-        """@param r_type: either self._valid or self._invalid
-        """
         # TODO: add doc string
 
         # two cases:
@@ -1253,6 +1251,7 @@ class ColSplitter(object):
         """
         arr = self._create_array()
         self._token_col_types = []
+        self._token_col_lengths = []
         arr = self._homogenize(arr)
         arr = self._merge_vstr_cols(arr)
         arr = self._try_combine_cols(arr)
