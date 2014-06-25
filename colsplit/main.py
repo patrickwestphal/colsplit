@@ -17,26 +17,42 @@ def run(input_file_path, outfile_path=None, csv_file_header=False):
         if csv_file_header:
             # TODO: do I need the col names?
             col_names = first_line
-        else:
-            col_splitters.append(ColSplitter())
 
         num_cols = len(first_line)
 
         for i in range(num_cols):
-            col_splitters.append(ColSplitter())
+            col_splitters.append(ColSplitter(considered_fixed_lengths=[2]))
+            if not csv_file_header:
+                col_splitters[i].add_line(first_line[i])
 
         num_cols = None
+        num_lines = 0 if csv_file_header else 1
         for line in csv_reader:
             if len(line) > 0 and num_cols is None:
                 num_cols = len(line)
             for i in range(len(line)):
-
                 col_splitters[i].add_line(line[i])
+            num_lines += 1
 
-    for splitter in col_splitters:
-        splitter.get_data()
     if outfile_path is None:
         out_file = sys.stdout
     else:
         out_file = open(outfile_path, 'w')
-    # TODO: write back results
+    csv_writer = csv.writer(out_file)
+
+    results = []
+    for splitter in col_splitters:
+        results.append(splitter.get_data())
+
+    for line_nr in range(num_lines):
+        line = []
+        for cs_nr in range(len(col_splitters)):
+            result = results[cs_nr]
+            for field in result[line_nr, :]:
+                if field==col_splitters[cs_nr]._null:
+                    line.append('')
+                else:
+                    line.append(field.decode('utf8'))
+        csv_writer.writerow(line)
+
+    out_file.close()
