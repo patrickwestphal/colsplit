@@ -91,16 +91,16 @@ class TestColSplitter(unittest.TestCase):
         null_token = clsplttr._null
         self.assertEqual(clsplttr._null_type, clsplttr._get_type(null_token))
 
-        str_token = 'test123'
+        str_token = b'test123'
         self.assertEqual(clsplttr._str, clsplttr._get_type(str_token))
 
-        int_token = '2345'
+        int_token = b'2345'
         self.assertEqual(clsplttr._int, clsplttr._get_type(int_token))
 
-        int_token = '02345'
+        int_token = b'02345'
         self.assertEqual(clsplttr._int, clsplttr._get_type(int_token))
 
-        float_token = '0.123'
+        float_token = b'0.123'
         self.assertEqual(clsplttr._float, clsplttr._get_type(float_token))
 
     def test__hom_on_types___token_col_types_homogeneous(self):
