@@ -4,13 +4,14 @@ import sys
 from colsplit.colsplitter import ColSplitter
 
 
-def run(input_file_path, outfile_path=None, csv_file_header=False):
+def run(input_file_path, outfile_path=None, csv_file_header=False,
+        delimiter=',', encoding='utf8', considered_fixed_lengths=[2, 3]):
 
     col_names = None
     col_splitters = []
 
-    with open(input_file_path) as in_file:
-        csv_reader = csv.reader(in_file)
+    with open(input_file_path, encoding=encoding) as in_file:
+        csv_reader = csv.reader(in_file, delimiter=delimiter)
 
         first_line = next(csv_reader)
 
@@ -21,7 +22,10 @@ def run(input_file_path, outfile_path=None, csv_file_header=False):
         num_cols = len(first_line)
 
         for i in range(num_cols):
-            col_splitters.append(ColSplitter(considered_fixed_lengths=[2]))
+            col_splitters.append(ColSplitter(
+                considered_fixed_lengths=considered_fixed_lengths,
+                encoding=encoding))
+            # col_splitters.append(ColSplitter())
             if not csv_file_header:
                 col_splitters[i].add_line(first_line[i])
 
@@ -48,11 +52,16 @@ def run(input_file_path, outfile_path=None, csv_file_header=False):
         line = []
         for cs_nr in range(len(col_splitters)):
             result = results[cs_nr]
-            for field in result[line_nr, :]:
-                if field==col_splitters[cs_nr]._null:
+            try:
+                res = result[line_nr, :]
+            except IndexError:
+                continue
+
+            for field in res:
+                if field == col_splitters[cs_nr]._null:
                     line.append('')
                 else:
-                    line.append(field.decode('utf8'))
+                    line.append(field.decode(encoding))
         csv_writer.writerow(line)
 
     out_file.close()

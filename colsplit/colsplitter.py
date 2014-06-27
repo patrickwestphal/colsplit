@@ -394,7 +394,7 @@ class ColSplitter(object):
     ###########################################################################
 
     def __init__(self, delimiter=' ', threshold=0.7,
-                 considered_fixed_lengths=[2, 3]):
+                 considered_fixed_lengths=[2, 3], encoding='utf8'):
 
         F = False
         T = True
@@ -636,6 +636,7 @@ class ColSplitter(object):
         }
 
         self._delimiter = delimiter
+        self._encoding = encoding
         self._threshold = threshold
         # this threshold determines the minimum portion of fixed length string
         # values (of a given length) that must exist to introduce a dedicated
@@ -683,7 +684,8 @@ class ColSplitter(object):
                     self._line_tokens.append([])
 
             # add token to line tokens
-            self._line_tokens[self._line_counter].append(token.strip())
+            self._line_tokens[self._line_counter].append(
+                token.strip().encode(self._encoding))
 
         self._line_counter += 1
 
@@ -695,26 +697,31 @@ class ColSplitter(object):
             (self._line_counter, self._max_line_tokens),
             self._max_token_str_len)
         for i in range(self._line_counter):
-            num_tokens = len(self._line_tokens[i])
-            arr_line = self._line_tokens[i] + \
-                [self._null]*(self._max_line_tokens-num_tokens)
+            try:
+                num_tokens = len(self._line_tokens[i])
+                arr_line = self._line_tokens[i] + \
+                    [self._null]*(self._max_line_tokens-num_tokens)
+            except IndexError:
+                arr_line = [self._null]*self._max_line_tokens
+
             arr[i] = arr_line
         return arr
 
     def _get_type(self, token):
+        # TODO: handle thousands comma
         if token == self._null:
             token_type = self._null_type
         else:
             token_type = self._str
 
             try:
-                float(token)
+                float(token.decode(self._encoding).replace(',', ''))
                 token_type = self._float
             except ValueError:
                 pass
 
             try:
-                int(token)
+                int(token.decode(self._encoding).replace(',', ''))
                 token_type = self._int
             except ValueError:
                 pass
