@@ -394,7 +394,8 @@ class ColSplitter(object):
     ###########################################################################
 
     def __init__(self, delimiter=' ', threshold=0.7,
-                 considered_fixed_lengths=[2, 3], encoding='utf8'):
+                 considered_fixed_lengths=[2, 3], encoding='utf8',
+                 greedy_merge=True):
 
         F = False
         T = True
@@ -651,8 +652,7 @@ class ColSplitter(object):
         # controls whether all adjacent string columns should be merged or
         # whether only sparse columns should be merged to their left neighbor
         # (if the neighbor col is also a str col with variable str length)
-        # TODO: make this configurable somehow
-        self._greedy_merge = True
+        self._greedy_merge = greedy_merge
         self._considered_lengths = considered_fixed_lengths
         self._max_token_str_len = len(self._null)
         self._max_line_tokens = 0

@@ -5,7 +5,8 @@ from colsplit.colsplitter import ColSplitter
 
 
 def run(input_file_path, outfile_path=None, csv_file_header=False,
-        delimiter=',', encoding='utf8', considered_fixed_lengths=[2, 3]):
+        delimiter=',', encoding='utf8', considered_fixed_lengths=[2, 3],
+        greedy_merge=True):
 
     col_names = None
     col_splitters = []
@@ -24,7 +25,7 @@ def run(input_file_path, outfile_path=None, csv_file_header=False,
         for i in range(num_cols):
             col_splitters.append(ColSplitter(
                 considered_fixed_lengths=considered_fixed_lengths,
-                encoding=encoding))
+                encoding=encoding, greedy_merge=greedy_merge))
             # col_splitters.append(ColSplitter())
             if not csv_file_header:
                 col_splitters[i].add_line(first_line[i])
